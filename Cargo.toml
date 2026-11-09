@@ -1,0 +1,44 @@
+[package]
+name = "tideorm-engine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+description = "Internal execution engine for TideORM"
+license = "MIT"
+repository = "https://github.com/rust-ocean/tideorm-engine"
+readme = "README.md"
+keywords = ["database", "orm", "sql", "tideorm"]
+categories = ["database"]
+
+# docs.rs builds the default features, which select no driver.
+[package.metadata.docs.rs]
+features = ["postgres", "mysql", "sqlite", "runtime-tokio"]
+
+[features]
+default = []
+postgres = ["dep:tideorm-driver", "dep:tideorm-driver-core", "tideorm-driver/postgres"]
+mysql = ["dep:tideorm-driver", "dep:tideorm-driver-core", "tideorm-driver/mysql"]
+sqlite = ["dep:tideorm-driver", "dep:tideorm-driver-core", "tideorm-driver/sqlite"]
+runtime-tokio = ["tideorm-driver?/runtime-tokio", "tideorm-driver?/tls-rustls"]
+runtime-async-std = ["tideorm-driver?/runtime-async-std", "tideorm-driver?/tls-rustls"]
+
+[dependencies]
+# Requirements are the ones TideORM 0.16 already resolved, so this crate raises
+# no minimum version and existing downstream lockfiles keep resolving.
+tideorm-sql-builder = "0.1.0"
+tideorm-driver = { version = "0.1.0", optional = true }
+tideorm-driver-core = { version = "0.1.0", optional = true }
+thiserror = "2"
+chrono = { version = "0.4.30", features = ["serde"] }
+serde_json = "1.0"
+rust_decimal = "1"
+uuid = { version = "1", features = ["serde"] }
+tracing = { version = "0.1", default-features = false, features = ["attributes", "log"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+url = "2.2"
+async-io = "2.6.0"
+async-std = "1.13.2"
+tokio = { version = "1.54.1", features = ["rt", "time"] }

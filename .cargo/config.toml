@@ -1,0 +1,5 @@
+# Force single-threaded test execution for integration tests
+# This prevents connection pool exhaustion and race conditions
+[env]
+RUST_TEST_THREADS = "1"
+RUST_TEST_NOCAPTURE = "1"
