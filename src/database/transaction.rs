@@ -216,23 +216,23 @@ impl DatabaseTransaction {
         let refusal = if commit {
             match self.conn.commit_refusal() {
                 Some(refusal) => Some(refusal),
-                None if nested_open => Some(DbErr::TransactionAborted {
-                    reason: "the transaction cannot commit while a transaction nested in it is \
-                             open, so it was rolled back with that one"
-                        .into(),
-                    cause: None,
-                }),
+                None if nested_open => Some((
+                    "the transaction cannot commit while a transaction nested in it is open".into(),
+                    None,
+                )),
                 // PostgreSQL answers the `COMMIT` of a failed transaction with
                 // a rollback and no error.
                 None => {
                     let failed: bool = on_connection!(connection, connection => {
                         backend::transaction_failed(connection).await
                     })?;
-                    failed.then(|| DbErr::TransactionAborted {
-                        reason: "the transaction cannot commit: a statement inside it failed, \
-                                 which aborted it, so it was rolled back"
-                            .into(),
-                        cause: None,
+                    failed.then(|| {
+                        (
+                            "the transaction cannot commit: a statement inside it failed, which \
+                             aborted it"
+                                .into(),
+                            None,
+                        )
                     })
                 }
             }
@@ -253,9 +253,17 @@ impl DatabaseTransaction {
         } else {
             self.state.store(OPEN, Ordering::Release);
         }
-        match refusal {
-            Some(refusal) => Err(refusal),
-            None => ended,
+        match (refusal, ended) {
+            (None, ended) => ended,
+            (Some((reason, cause)), Ok(())) => Err(DbErr::TransactionAborted {
+                reason: format!("{reason}, so it was rolled back"),
+                cause,
+            }),
+            // Still open: dropping it rolls it back.
+            (Some((reason, cause)), Err(rollback)) => Err(DbErr::TransactionAborted {
+                reason: format!("{reason}, and rolling it back failed: {rollback}"),
+                cause,
+            }),
         }
     }
 

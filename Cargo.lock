@@ -1412,9 +1412,9 @@ dependencies = [
 
 [[package]]
 name = "tideorm-driver-core"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d42d21457fd003699d09a16b8ddce457cf03fc3857633ea4ecc197b7a1807411"
+checksum = "da81e9c4aa3736b4f5e720a13834abdb2f0ae55be85f8fff8cb74f4ec81e9476"
 dependencies = [
  "async-io",
  "async-std",
@@ -1426,7 +1426,6 @@ dependencies = [
  "event-listener 5.4.2",
  "futures-core",
  "futures-intrusive",
- "futures-io",
  "futures-util",
  "hashbrown 0.16.1",
  "hashlink",
@@ -1449,15 +1448,14 @@ dependencies = [
 
 [[package]]
 name = "tideorm-driver-mysql"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d92238466ab7f7a7bffcb2fc63026240885f5abe80970f0e52098c107b697cd"
+checksum = "90249f987e94b93b8b3ea63d464423a8de250be88b2683bc9e51adff08b46e71"
 dependencies = [
  "bitflags",
  "byteorder",
  "bytes",
  "chrono",
- "digest",
  "either",
  "futures-core",
  "futures-util",
@@ -1473,9 +1471,9 @@ dependencies = [
 
 [[package]]
 name = "tideorm-driver-postgres"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb47c648a170250a77f79e34b8964ba4c17db42f4606c098586500c44d05d4a"
+checksum = "7a25117f256dc3ba86945626e12c1b3f0426e64e0a4a6cb2b447ecb4ec801e42"
 dependencies = [
  "atoi",
  "base64",
@@ -1533,7 +1531,7 @@ dependencies = [
 
 [[package]]
 name = "tideorm-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-io",
  "async-std",

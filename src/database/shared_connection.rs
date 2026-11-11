@@ -266,14 +266,15 @@ impl SharedConnection {
         }
     }
 
-    /// What the commit of an aborted transaction fails with.
-    pub(crate) fn commit_refusal(&self) -> Option<DbErr> {
-        self.aborted()
-            .as_ref()
-            .map(|(reason, cause)| DbErr::TransactionAborted {
-                reason: format!("the transaction cannot commit: {reason}, so it was rolled back"),
-                cause: cause.clone(),
-            })
+    /// Why the commit of an aborted transaction is refused, and the failure
+    /// that aborted it.
+    pub(crate) fn commit_refusal(&self) -> Option<(String, Option<Arc<DbErr>>)> {
+        self.aborted().as_ref().map(|(reason, cause)| {
+            (
+                format!("the transaction cannot commit: {reason}"),
+                cause.clone(),
+            )
+        })
     }
 
     fn aborted(&self) -> std::sync::MutexGuard<'_, Option<(String, Option<Arc<DbErr>>)>> {
