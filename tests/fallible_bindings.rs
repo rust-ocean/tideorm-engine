@@ -95,6 +95,14 @@ fn legacy_equivalent(statement: &Statement) -> Statement {
     statement
 }
 
+/// An argument list as Debug shows it: all three drivers' argument types show
+/// the encoded buffer and its type and null metadata. SQLite's `Text` and
+/// `TextSlice` hold the same text, moved into the list or copied from a
+/// borrowed string, so they read alike here.
+fn shown(arguments: &impl std::fmt::Debug) -> String {
+    format!("{arguments:?}").replace("TextSlice(", "Text(")
+}
+
 macro_rules! parity {
     ($statement:expr, $database:ty, $method:ident) => {{
         let statement = $statement;
@@ -109,9 +117,7 @@ macro_rules! parity {
             let candidate = statement.$method().unwrap();
             assert_eq!(legacy.len(), expected);
             assert_eq!(candidate.len(), expected);
-            // All three drivers' argument types show the encoded buffer and its
-            // type and null metadata in Debug.
-            assert_eq!(format!("{candidate:?}"), format!("{legacy:?}"));
+            assert_eq!(shown(&candidate), shown(&legacy));
         }
         assert_eq!(statement, saved);
     }};
@@ -164,7 +170,7 @@ macro_rules! scalar_test {
                 .unwrap();
             let candidate = raw.$method().unwrap();
             assert_eq!(candidate.len(), 4);
-            assert_eq!(format!("{candidate:?}"), format!("{legacy:?}"));
+            assert_eq!(shown(&candidate), shown(&legacy));
         }
     };
 }
