@@ -8,8 +8,12 @@ use crate::{Statement, StatementBuilder, error::*};
 macro_rules! on_builder {
     ($backend:expr, $builder:ident => $body:expr) => {
         match $backend {
-            $crate::DbBackend::MySQL | $crate::DbBackend::MariaDB => {
+            $crate::DbBackend::MySQL => {
                 let $builder = sql_builder::MysqlQueryBuilder;
+                $body
+            }
+            $crate::DbBackend::MariaDB => {
+                let $builder = sql_builder::MariaDbDialect;
                 $body
             }
             $crate::DbBackend::Postgres => {
