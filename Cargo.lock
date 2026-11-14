@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "tideorm-engine"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "async-io",
  "async-std",
@@ -1541,9 +1541,9 @@ dependencies = [
 
 [[package]]
 name = "tideorm-sql-builder"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c9a73ad39210c01c87087885d3c99c949459249a698222bbc28e1a7a8a3ad80"
+checksum = "b199c66a78aad96cb6053b8116f01401493cd900eabc1aaecd2c5051dd761a76"
 dependencies = [
  "chrono",
  "rust_decimal",

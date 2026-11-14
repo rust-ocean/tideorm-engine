@@ -1,6 +1,6 @@
 [package]
 name = "tideorm-engine"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 rust-version = "1.94"
 description = "Internal execution engine for TideORM"
@@ -24,8 +24,9 @@ runtime-async-std = ["tideorm-driver?/runtime-async-std", "tideorm-driver?/tls-r
 
 [dependencies]
 # The lowest versions that have what this crate uses (the builder's
-# `MariaDbDialect` came in 0.1.1), so it raises no minimum further.
-tideorm-sql-builder = "0.1.1"
+# `ValueType::COLUMN_KIND`, which TideORM's derive reads through this crate's
+# re-export, came in 0.1.2), so it raises no minimum further.
+tideorm-sql-builder = "0.1.2"
 tideorm-driver = { version = "0.1.0", optional = true }
 tideorm-driver-core = { version = "0.1.0", optional = true }
 thiserror = "2"
