@@ -11,8 +11,8 @@ use driver_core::transaction::TransactionManager;
 use tracing::{instrument, warn};
 
 use crate::{
-    AccessMode, ConnectOptions, DatabaseConnection, DatabaseConnectionType, DbBackend, Statement,
-    TransactionOptions, error::*, executor::*,
+    AccessMode, ConnectOptions, DatabaseConnection, DatabaseConnectionType, DbBackend, DbServer,
+    Statement, TransactionOptions, error::*, executor::*,
 };
 
 use super::{Driver, DriverPoolConnection, InnerConnection, common::*};
@@ -115,6 +115,10 @@ impl Driver for Sqlite {
 
     fn arguments(statement: &Statement) -> Result<Self::Arguments, driver::Error> {
         statement.try_sqlite_arguments()
+    }
+
+    fn server(_connection: &PoolConnection<Sqlite>) -> DbServer {
+        DbServer::Sqlite
     }
 
     fn exec_result(result: SqliteQueryResult) -> ExecResult {

@@ -170,9 +170,7 @@ fn raw_pagination_preserves_numbered_parameters_and_sql_literals() {
         }
         // The page's offset is bound after the statement's own values.
         assert!(
-            captured[0]
-                .sql
-                .ends_with(") AS sub_query LIMIT 2 OFFSET $3"),
+            captured[0].sql.ends_with("$$a$$ = $$a$$ LIMIT 2 OFFSET $3"),
             "{}",
             captured[0].sql
         );
@@ -213,9 +211,13 @@ fn raw_pagination_preserves_numbered_parameters_and_sql_literals() {
 }
 
 #[test]
-fn mysql_and_sqlite_pages_follow_a_query_that_sets_no_bounds() {
+fn pages_follow_a_query_that_sets_no_bounds() {
     async {
-        for (backend, offset) in [(DbBackend::MySQL, "?"), (DbBackend::SQLite, "?2")] {
+        for (backend, offset) in [
+            (DbBackend::MySQL, "?"),
+            (DbBackend::SQLite, "?2"),
+            (DbBackend::Postgres, "$2"),
+        ] {
             let db = Capture {
                 backend,
                 fail: false,
@@ -241,6 +243,11 @@ fn mysql_and_sqlite_pages_follow_a_query_that_sets_no_bounds() {
                     ),
                 ),
             ] {
+                // `?` is an operator on PostgreSQL, `$1` its marker.
+                let (sql, expected) = match backend {
+                    DbBackend::Postgres => (sql.replace(" ?", " $1"), expected.replace(" ?", " $1")),
+                    _ => (sql.to_owned(), expected),
+                };
                 let statement = Statement::from_sql_and_values(backend, sql, [1i64.into()]);
                 raw(statement.clone())
                     .paginate(&db, 2)
@@ -502,6 +509,24 @@ mod live {
                 pages.fetch_page(1).await.unwrap(),
                 expected[2..expected.len().min(4)]
             );
+        }
+        // A page of a locked query, its bounds after the comment before the
+        // lock, and on PostgreSQL of a parenthesised one bounding its rows.
+        let mut shaped = Vec::new();
+        if backend != DbBackend::SQLite {
+            shaped.push(
+                "SELECT id FROM pagination_rows ORDER BY id DESC -- newest
+FOR UPDATE",
+            );
+        }
+        if backend == DbBackend::Postgres {
+            shaped.push("(SELECT id FROM pagination_rows ORDER BY id DESC LIMIT 3)");
+        }
+        for sql in shaped {
+            let statement = Statement::from_string(backend, sql);
+            let pages = raw(statement.clone()).paginate(&db, 2);
+            assert_eq!(pages.fetch_page(0).await.unwrap(), [Id(5), Id(4)], "{sql}");
+            assert!(raw(statement).exists(&db).await.unwrap(), "{sql}");
         }
         if let Some(before) = optimizer_before {
             let after = db

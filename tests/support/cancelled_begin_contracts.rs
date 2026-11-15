@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tideorm_engine::{
-    ConnectOptions, ConnectionTrait, Database, DbBackend, Statement, TransactionTrait,
+    ConnectOptions, ConnectionTrait, Database, DbBackend, DbServer, Statement, TransactionTrait,
 };
 
 /// Holds the first successful BEGIN reply, after the server has entered the
@@ -178,12 +178,17 @@ async fn cancelled_begin(url: &str, disconnect: bool) {
         .acquire_timeout(Duration::from_secs(10));
     let db = Database::connect(options).await.unwrap();
     let observer = Database::connect(url.to_string()).await.unwrap();
-    let identity = if postgres {
-        "SELECT CAST(pg_backend_pid() AS BIGINT) AS n"
-    } else {
-        "SELECT CAST(CONNECTION_ID() AS SIGNED) AS n"
+    // vtgate's `CONNECTION_ID()` names the tablet connection a statement ran
+    // on, not the client's session.
+    let identity = match db.get_database_server() {
+        Some(DbServer::Vitess) => None,
+        _ if postgres => Some("SELECT CAST(pg_backend_pid() AS BIGINT) AS n"),
+        _ => Some("SELECT CAST(CONNECTION_ID() AS SIGNED) AS n"),
     };
-    let original_session = scalar(&db, identity).await;
+    let original_session = match identity {
+        Some(identity) => Some((identity, scalar(&db, identity).await)),
+        None => None,
+    };
     db.execute_unprepared("DROP TABLE IF EXISTS tx_cancelled_begin")
         .await
         .unwrap();
@@ -212,14 +217,16 @@ async fn cancelled_begin(url: &str, disconnect: bool) {
     };
     drop(pending_begin);
     proxy.gate.release.store(true, Ordering::SeqCst);
-    let next_session = scalar(&db, identity).await;
-    if disconnect {
-        assert_ne!(next_session, original_session);
-    } else {
-        assert_eq!(
-            next_session, original_session,
-            "healthy session must be reconciled and reused"
-        );
+    if let Some((identity, original_session)) = original_session {
+        let next_session = scalar(&db, identity).await;
+        if disconnect {
+            assert_ne!(next_session, original_session);
+        } else {
+            assert_eq!(
+                next_session, original_session,
+                "healthy session must be reconciled and reused"
+            );
+        }
     }
     db.execute_unprepared("INSERT INTO tx_cancelled_begin VALUES (1)")
         .await

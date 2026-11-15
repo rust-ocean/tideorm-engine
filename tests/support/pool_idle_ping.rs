@@ -97,6 +97,8 @@ fn zero_idle_threshold_pings_even_with_the_boolean_disabled() {
             .test_before_acquire_if_idle_for(Duration::ZERO)
             .test_before_acquire(false);
         let db = Database::connect(options).await.unwrap();
+        // Connecting checks a connection out to learn the server, so it pings.
+        assert_eq!(std::mem::take(&mut *events.lock().unwrap()), ["ping"]);
         let pool = db.get_postgres_connection_pool().unwrap();
         released(|| pool.num_idle(), &events).await;
         let connection = pool.acquire().await.unwrap();

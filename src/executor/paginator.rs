@@ -200,12 +200,11 @@ where
 
     /// Paginate the result of a select operation.
     ///
-    /// Raw SQL keeps its SQL and bindings: on MySQL, MariaDB and SQLite each
-    /// page's `LIMIT` and `OFFSET` follow it, unless it bounds its own rows,
-    /// when it is read as a derived table, as it always is on PostgreSQL and
-    /// to count it. A derived table's columns need distinct names on MySQL
-    /// and MariaDB. It must be a single query; invalid SQL is reported by the
-    /// database when executed.
+    /// Raw SQL keeps its SQL and bindings: each page's `LIMIT` and `OFFSET`
+    /// follow it, unless it bounds its own rows. Such a query is read as a
+    /// derived table, as every query is to count its rows, and a derived
+    /// table's columns need distinct names on MySQL and MariaDB. It must be a
+    /// single query; invalid SQL is reported by the database when executed.
     ///
     /// # Panics
     /// Panics if `page_size` is zero.

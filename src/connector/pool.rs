@@ -1,15 +1,12 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, OnceLock};
 
 use driver::{Connection, pool::PoolConnection};
 use tracing::instrument;
 
 use super::{Driver, backend, common::*};
 use crate::{
-    DatabaseConnection, DatabaseTransaction, DbErr, ExecResult, QueryResult, SessionConnection,
-    Statement, TransactionOptions, metric::Callback,
+    DatabaseConnection, DatabaseTransaction, DbErr, DbServer, ExecResult, QueryResult,
+    SessionConnection, Statement, TransactionOptions, metric::Callback,
 };
 
 /// A driver connection pool the engine runs statements on, reporting each to
@@ -20,8 +17,8 @@ use crate::{
 pub struct DriverPoolConnection<DB: Driver> {
     pub(crate) pool: driver::Pool<DB>,
     metric_callback: Option<Callback>,
-    /// Set once a connection taken from the pool said it reaches MariaDB.
-    mariadb: Arc<AtomicBool>,
+    /// The server the first connection taken from the pool said it reaches.
+    server: Arc<OnceLock<DbServer>>,
     /// See [`DatabaseConnection::identity`].
     identity: u64,
 }
@@ -31,7 +28,7 @@ impl<DB: Driver> Clone for DriverPoolConnection<DB> {
         Self {
             pool: self.pool.clone(),
             metric_callback: self.metric_callback.clone(),
-            mariadb: self.mariadb.clone(),
+            server: self.server.clone(),
             identity: self.identity,
         }
     }
@@ -48,7 +45,12 @@ impl<DB: Driver> From<driver::Pool<DB>> for DriverPoolConnection<DB> {
         Self {
             pool,
             metric_callback: None,
-            mariadb: Arc::default(),
+            // SQLite is only ever itself.
+            server: Arc::new(if DB::BACKEND == crate::DbBackend::SQLite {
+                OnceLock::from(DbServer::Sqlite)
+            } else {
+                OnceLock::new()
+            }),
             identity: crate::database::new_identity(),
         }
     }
@@ -62,36 +64,23 @@ impl<DB: Driver> From<driver::Pool<DB>> for DatabaseConnection {
 
 impl<DB: Driver> DriverPoolConnection<DB> {
     pub(crate) fn backend(&self) -> crate::DbBackend {
-        if self.is_mariadb() {
-            crate::DbBackend::MariaDB
-        } else {
-            DB::BACKEND
-        }
+        self.server().map_or(DB::BACKEND, DbServer::backend)
     }
 
-    async fn acquire(&self) -> Result<PoolConnection<DB>, DbErr> {
+    pub(super) async fn acquire(&self) -> Result<PoolConnection<DB>, DbErr> {
         let connection = self.pool.acquire().await.map_err(driver_conn_acquire_err)?;
-        if DB::is_mariadb(&connection) {
-            self.mariadb.store(true, Ordering::Release);
-        }
+        self.server.get_or_init(|| DB::server(&connection));
         Ok(connection)
-    }
-
-    /// Take one connection from the pool, opening it if none is idle, so the
-    /// pool knows what server it reaches (see [`is_mariadb`](Self::is_mariadb)).
-    #[cfg(feature = "mysql")]
-    pub(crate) async fn identify_server(&self) -> Result<(), DbErr> {
-        self.acquire().await.map(drop)
     }
 
     pub(crate) fn identity(&self) -> u64 {
         self.identity
     }
 
-    /// Whether the pool reaches MariaDB, as its connections said when they
-    /// opened; `false` until one was taken from it.
-    pub(crate) fn is_mariadb(&self) -> bool {
-        self.mariadb.load(Ordering::Acquire)
+    /// The server the pool reaches, as its connections said when they
+    /// opened; `None` until one was taken from it, but for SQLite.
+    pub(crate) fn server(&self) -> Option<DbServer> {
+        self.server.get().copied()
     }
 
     /// Execute a [Statement]
@@ -137,6 +126,7 @@ impl<DB: Driver> DriverPoolConnection<DB> {
             .max_lifetime(None)
             .connect_lazy_with((*self.pool.connect_options()).clone());
         let mut connection = session.acquire().await.map_err(driver_conn_acquire_err)?;
+        self.server.get_or_init(|| DB::server(&connection));
         connection.close_on_drop();
         Ok(SessionConnection::new(
             DB::into_inner(connection),

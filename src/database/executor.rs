@@ -1,6 +1,6 @@
 use crate::{
-    ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, DbErr, ExecResult,
-    QueryResult, Statement, TransactionOptions, TransactionTrait,
+    ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, DbErr, DbServer,
+    ExecResult, QueryResult, Statement, TransactionOptions, TransactionTrait,
 };
 
 /// Either a borrowed [`DatabaseConnection`] / [`DatabaseTransaction`], or an
@@ -50,6 +50,10 @@ macro_rules! on_target {
 impl ConnectionTrait for DatabaseExecutor<'_> {
     fn get_database_backend(&self) -> DbBackend {
         on_target!(self, target => target.get_database_backend())
+    }
+
+    fn get_database_server(&self) -> Option<DbServer> {
+        on_target!(self, target => target.get_database_server())
     }
 
     fn execute_raw(

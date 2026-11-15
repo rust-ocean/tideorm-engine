@@ -1,6 +1,6 @@
 use driver::{
     MySql, MySqlPool,
-    mysql::{MySqlConnectOptions, MySqlQueryResult, MySqlRow},
+    mysql::{MySqlConnectOptions, MySqlQueryResult, MySqlRow, MySqlServer},
     pool::PoolConnection,
 };
 use driver_core::sql_str::SqlSafeStr;
@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 use tracing::instrument;
 
 use crate::{
-    ConnectOptions, DatabaseConnection, DatabaseConnectionType, DbBackend, Statement,
+    ConnectOptions, DatabaseConnection, DatabaseConnectionType, DbBackend, DbServer, Statement,
     TransactionOptions, error::*, executor::*,
 };
 
@@ -23,8 +23,7 @@ pub struct MySqlConnector;
 pub type MySqlPoolConnection = DriverPoolConnection<MySql>;
 
 impl MySqlConnector {
-    /// Opens a pool on `connect` with `options`' pool settings and, unless
-    /// it is lazy, learns from a connection whether the server is MariaDB.
+    /// Opens a pool on `connect` with `options`' pool settings.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn connect(
         options: ConnectOptions,
@@ -34,9 +33,6 @@ impl MySqlConnector {
             connect = connect.statement_cache_capacity(capacity);
         }
         let pool = open_pool(&options, connect).await?;
-        if !options.connect_lazy {
-            pool.identify_server().await?;
-        }
         Ok(MySql::into_connection(pool))
     }
 
@@ -54,8 +50,13 @@ impl Driver for MySql {
         statement.try_mysql_arguments()
     }
 
-    fn is_mariadb(connection: &PoolConnection<MySql>) -> bool {
-        connection.is_mariadb()
+    fn server(connection: &PoolConnection<MySql>) -> DbServer {
+        match connection.server() {
+            MySqlServer::MariaDb => DbServer::MariaDb,
+            MySqlServer::TiDb => DbServer::TiDb,
+            MySqlServer::Vitess => DbServer::Vitess,
+            _ => DbServer::MySql,
+        }
     }
 
     fn exec_result(result: MySqlQueryResult) -> ExecResult {

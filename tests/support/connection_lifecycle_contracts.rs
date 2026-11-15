@@ -7,7 +7,7 @@ use std::time::Duration;
 use tideorm::internal::driver::{self, Row, sqlite::SqliteConnectOptions};
 use tideorm::orm::{
     ConnectOptions, Database, DatabaseConnection, DatabaseConnectionType, DbBackend, DbErr,
-    Statement,
+    DbServer, Statement,
 };
 
 /// Driver options reach settings a URL cannot name, and the pool's sizing
@@ -77,8 +77,10 @@ async fn sqlite_lazy() {
         pool.options().get_test_before_acquire_if_idle_for(),
         Some(Duration::ZERO)
     );
-    // A lazy pool opens no connection before its first statement.
+    // A lazy pool opens no connection before its first statement, and SQLite
+    // needs none to name its server.
     assert_eq!(pool.size(), 0);
+    assert_eq!(connection.get_database_server(), Some(DbServer::Sqlite));
     let one: i64 = driver::query("SELECT 1")
         .fetch_one(pool)
         .await

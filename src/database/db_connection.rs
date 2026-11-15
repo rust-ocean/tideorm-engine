@@ -1,5 +1,5 @@
 use crate::{
-    ConnectionTrait, DatabaseTransaction, DbBackend, ExecResult, QueryResult, Statement,
+    ConnectionTrait, DatabaseTransaction, DbBackend, DbServer, ExecResult, QueryResult, Statement,
     TransactionOptions, TransactionTrait, error::*,
 };
 use std::fmt::Debug;
@@ -99,6 +99,10 @@ impl ConnectionTrait for DatabaseConnection {
         self.get_database_backend()
     }
 
+    fn get_database_server(&self) -> Option<DbServer> {
+        self.get_database_server()
+    }
+
     #[instrument(level = "trace", skip(stmt))]
     #[allow(unused_variables)]
     async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
@@ -146,6 +150,12 @@ impl DatabaseConnection {
     /// Get the database backend for this connection
     pub fn get_database_backend(&self) -> DbBackend {
         on_pool!(&self.inner, pool => pool.backend())
+    }
+
+    /// The server this connection reaches, as its connections said when they
+    /// opened: `None` for a lazy pool no connection was taken from yet.
+    pub fn get_database_server(&self) -> Option<DbServer> {
+        on_pool!(&self.inner, pool => pool.server())
     }
 
     /// Sets a callback to metric this connection

@@ -43,6 +43,10 @@ jobs:
       - name: Run clippy
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
+      # `cargo publish` builds the default features, which pick no backend.
+      - name: Run clippy without a backend
+        run: cargo clippy --locked -- -D warnings
+
   # `rust-version` is a promise to downstream resolvers that no other job checks.
   # Keep this literal in sync with `rust-version` in Cargo.toml.
   msrv:
@@ -184,3 +188,75 @@ jobs:
 
       - name: Run engine query and mutation contracts
         run: cargo test --locked --no-default-features --features sqlite,mysql,runtime-tokio --tests 'live::'
+
+  # Servers speaking PostgreSQL's or MySQL's protocol run that family's
+  # contracts. They start with `docker run`, since a service container takes no
+  # command; the images and options are tideorm's `integration-compatible` ones.
+  live-compatible:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - server: CockroachDB
+            feature: postgres
+            url: postgresql://root@127.0.0.1:26257/defaultdb
+            start: >-
+              docker run -d --name db -p 127.0.0.1:26257:26257
+              cockroachdb/cockroach:v26.4.0 start-single-node --insecure
+            ready: docker exec db ./cockroach sql --insecure -e "SELECT 1"
+          - server: YugabyteDB
+            feature: postgres
+            url: postgresql://yugabyte@127.0.0.1:5433/yugabyte
+            start: >-
+              docker run -d --name db -p 127.0.0.1:5433:5433
+              yugabytedb/yugabyte:2025.2.8.1-b8 bin/yugabyted start --background=false
+              --tserver_flags=ysql_sequence_cache_minval=1
+            ready: docker exec db bash -c 'bin/ysqlsh -h "$(hostname)" -U yugabyte -c "SELECT 1"'
+          - server: TiDB
+            feature: mysql
+            url: mysql://root@127.0.0.1:4000/test
+            start: docker run -d --name db -p 127.0.0.1:4000:4000 pingcap/tidb:v8.5.8
+            ready: mysql --protocol=tcp -h127.0.0.1 -P4000 -uroot -e "SELECT 1"
+          - server: Vitess
+            feature: mysql
+            url: mysql://root@127.0.0.1:33577/tideorm_test
+            # The keyspace is the database; its setup script exits 1 for one keyspace.
+            start: >-
+              docker run -d --name db -p 127.0.0.1:33577:33577 -e KEYSPACES=tideorm_test -e NUM_SHARDS=1
+              vitess/vttestserver:v24.0.5-mysql80 /bin/bash -c '/vt/setup_vschema_folder.sh "$KEYSPACES" "$NUM_SHARDS";
+              echo "max_connections = 1000" >> /vt/config/mycnf/test-suite.cnf &&
+              exec /vt/bin/vttestserver --port 33574 --keyspaces "$KEYSPACES" --num_shards "$NUM_SHARDS"
+              --mysql_bind_host 0.0.0.0 --mysql-server-version 8.0.43-Vitess --charset utf8mb4
+              --foreign_key_mode allow --enable_online_ddl=true --enable_direct_ddl=true --planner-version=gen4
+              --vschema_ddl_authorized_users=% --tablet_refresh_interval 10s --schema_dir=/vt/schema/
+              --queryserver-config-transaction-timeout 300s'
+            ready: mysql --protocol=tcp -h127.0.0.1 -P33577 -uroot tideorm_test -e "SELECT 1"
+
+    name: live-compatible (${{ matrix.server }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Start ${{ matrix.server }}
+        run: ${{ matrix.start }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+
+      - name: Wait for ${{ matrix.server }}
+        env:
+          READY: ${{ matrix.ready }}
+        run: timeout 300 bash -c 'until eval "$READY"; do sleep 5; done'
+
+      - name: Run engine query and mutation contracts
+        env:
+          ENGINE_PROBE_DATABASE_URL: ${{ matrix.url }}
+        run: cargo test --locked --no-default-features --features sqlite,${{ matrix.feature }},runtime-tokio --tests 'live::'
+
+      - name: Server log
+        if: failure()
+        run: docker logs --tail 200 db

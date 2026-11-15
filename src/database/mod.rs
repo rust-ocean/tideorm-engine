@@ -12,6 +12,7 @@ mod connection;
 mod db_connection;
 mod executor;
 mod masking;
+mod server;
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
 mod session;
 mod shared_connection;
@@ -23,6 +24,7 @@ pub use connection::*;
 pub use db_connection::*;
 pub use executor::*;
 pub use masking::mask_url_credentials;
+pub use server::DbServer;
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
 pub use session::SessionConnection;
 pub(crate) use shared_connection::SharedConnection;

@@ -16,8 +16,8 @@ use std::{
     time::Duration,
 };
 use tideorm_engine::{
-    ConnectOptions, ConnectionTrait, Database, DatabaseConnection, Statement, TransactionTrait,
-    sql_builder::Value,
+    ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbServer, Statement,
+    TransactionTrait, sql_builder::Value,
 };
 
 /// What the proxy lets through from the server: everything, or while `hold`
@@ -131,15 +131,28 @@ async fn scalar(db: &impl ConnectionTrait, sql: &str, values: Vec<Value>) -> i64
         .unwrap()
 }
 
-/// How many statements the server holds prepared, on every connection.
-async fn prepared_statements(db: &DatabaseConnection) -> i64 {
+/// The client session's id, or `None` on Vitess, whose `CONNECTION_ID()`
+/// names the tablet connection the statement ran on.
+async fn session(db: &impl ConnectionTrait) -> Option<i64> {
+    if db.get_database_server() == Some(DbServer::Vitess) {
+        return None;
+    }
+    Some(scalar(db, IDENTITY, vec![]).await)
+}
+
+/// How many statements the server holds prepared, on every connection, or
+/// `None` on TiDB, which does not say.
+async fn prepared_statements(db: &DatabaseConnection) -> Option<i64> {
+    if db.get_database_server() == Some(DbServer::TiDb) {
+        return None;
+    }
     let sql = "SHOW GLOBAL STATUS LIKE 'Prepared_stmt_count'";
     let row = db
         .query_one_raw(Statement::from_string(db.get_database_backend(), sql))
         .await
         .unwrap()
         .unwrap();
-    row.try_get_by_index::<String>(1).unwrap().parse().unwrap()
+    Some(row.try_get_by_index::<String>(1).unwrap().parse().unwrap())
 }
 
 /// A statement given the wrong number of values fails before it runs, and
@@ -155,7 +168,7 @@ async fn wrong_value_count(url: &str) {
             options.statement_cache_capacity(capacity);
         }
         let db = Database::connect(options).await.unwrap();
-        let session = scalar(&db, IDENTITY, vec![]).await;
+        let own = session(&db).await;
         let prepared = prepared_statements(&db).await;
         let wrong = || {
             Statement::from_sql_and_values(
@@ -173,11 +186,12 @@ async fn wrong_value_count(url: &str) {
         );
         let transaction = db.begin().await.unwrap();
         assert!(transaction.query_one_raw(wrong()).await.is_err());
-        assert_eq!(scalar(&transaction, IDENTITY, vec![]).await, session);
+        assert_eq!(session(&transaction).await, own);
         transaction.rollback().await.unwrap();
-        assert_eq!(scalar(&db, IDENTITY, vec![]).await, session);
-        if capacity == Some(0) {
-            let now = prepared_statements(&db).await;
+        assert_eq!(session(&db).await, own);
+        if capacity == Some(0)
+            && let (Some(prepared), Some(now)) = (prepared, prepared_statements(&db).await)
+        {
             assert!(
                 now < prepared + 5,
                 "{prepared} prepared before, {now} after"

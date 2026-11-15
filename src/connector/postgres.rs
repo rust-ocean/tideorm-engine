@@ -1,14 +1,14 @@
 use driver::{
     PgPool, Postgres,
     pool::PoolConnection,
-    postgres::{PgConnectOptions, PgQueryResult, PgRow},
+    postgres::{PgConnectOptions, PgQueryResult, PgRow, PgServer},
 };
 use driver_core::sql_str::SqlSafeStr;
 use driver_core::transaction::TransactionManager;
 use tracing::instrument;
 
 use crate::{
-    ConnectOptions, DatabaseConnection, DatabaseConnectionType, DbBackend, Statement,
+    ConnectOptions, DatabaseConnection, DatabaseConnectionType, DbBackend, DbServer, Statement,
     TransactionOptions, error::*, executor::*,
 };
 
@@ -47,6 +47,14 @@ impl Driver for Postgres {
 
     fn arguments(statement: &Statement) -> Result<Self::Arguments, driver::Error> {
         statement.try_postgres_arguments()
+    }
+
+    fn server(connection: &PoolConnection<Postgres>) -> DbServer {
+        match connection.server() {
+            PgServer::CockroachDb => DbServer::CockroachDb,
+            PgServer::YugabyteDb => DbServer::YugabyteDb,
+            _ => DbServer::Postgres,
+        }
     }
 
     fn exec_result(result: PgQueryResult) -> ExecResult {

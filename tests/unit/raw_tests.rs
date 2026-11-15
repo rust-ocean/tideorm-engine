@@ -141,8 +141,75 @@ fn mysql_bounds_go_before_a_row_lock() {
             "SELECT * FROM t WHERE a IN (SELECT a FROM u FOR UPDATE)",
             "SELECT * FROM t WHERE a IN (SELECT a FROM u FOR UPDATE) LIMIT 10 OFFSET ?",
         ),
+        // The newline ending a comment before the lock stays.
+        (
+            "SELECT * FROM t WHERE a = ? # ready only
+FOR UPDATE",
+            "SELECT * FROM t WHERE a = ? # ready only
+LIMIT 10 OFFSET ? FOR UPDATE",
+        ),
+        // MySQL bounds a parenthesised query again.
+        (
+            "(SELECT * FROM t WHERE a = ? LIMIT 5)",
+            "(SELECT * FROM t WHERE a = ? LIMIT 5) LIMIT 10 OFFSET ?",
+        ),
     ] {
         let paged = limited(statement(DbBackend::MySQL, sql, 1), 10, Some(5));
+        assert_eq!(paged.sql, expected, "{sql}");
+        assert_eq!(paged.values.map(|values| values.0.len()), Some(2));
+    }
+}
+
+#[test]
+fn postgres_bounds_follow_the_query_unless_it_bounds_its_rows() {
+    let derived = |sql: &str| format!("SELECT * FROM ({sql}) AS sub_query LIMIT 10 OFFSET $2");
+    for (sql, expected) in [
+        (
+            "SELECT id FROM t WHERE a = $1 -- ready only
+FOR UPDATE SKIP LOCKED",
+            "SELECT id FROM t WHERE a = $1 -- ready only
+LIMIT 10 OFFSET $2 FOR UPDATE SKIP LOCKED"
+                .to_owned(),
+        ),
+        (
+            "SELECT t.id FROM t JOIN b ON b.id = t.b_id WHERE t.a = $1 FOR NO KEY UPDATE OF t FOR UPDATE OF b",
+            "SELECT t.id FROM t JOIN b ON b.id = t.b_id WHERE t.a = $1 LIMIT 10 OFFSET $2 FOR NO KEY UPDATE OF t FOR UPDATE OF b"
+                .to_owned(),
+        ),
+        (
+            "SELECT id FROM t WHERE a = $1 FOR KEY SHARE",
+            "SELECT id FROM t WHERE a = $1 LIMIT 10 OFFSET $2 FOR KEY SHARE".to_owned(),
+        ),
+        (
+            "WITH c AS (SELECT id FROM t LIMIT 3) SELECT id FROM c WHERE id > $1",
+            "WITH c AS (SELECT id FROM t LIMIT 3) SELECT id FROM c WHERE id > $1 LIMIT 10 OFFSET $2"
+                .to_owned(),
+        ),
+        (
+            "SELECT id FROM t WHERE a IN (SELECT a FROM u WHERE b = $1 LIMIT 5)",
+            "SELECT id FROM t WHERE a IN (SELECT a FROM u WHERE b = $1 LIMIT 5) LIMIT 10 OFFSET $2"
+                .to_owned(),
+        ),
+        // PostgreSQL merges a parenthesised operand into the query, so its
+        // own bounds would be given twice.
+        (
+            "(SELECT id FROM t WHERE a = $1 ORDER BY id LIMIT 5)",
+            derived("(SELECT id FROM t WHERE a = $1 ORDER BY id LIMIT 5)"),
+        ),
+        (
+            "((SELECT id FROM t WHERE a = $1 OFFSET 1))",
+            derived("((SELECT id FROM t WHERE a = $1 OFFSET 1))"),
+        ),
+        (
+            "WITH c AS (SELECT id FROM t) (SELECT id FROM c WHERE id > $1 FETCH FIRST 4 ROWS ONLY)",
+            derived("WITH c AS (SELECT id FROM t) (SELECT id FROM c WHERE id > $1 FETCH FIRST 4 ROWS ONLY)"),
+        ),
+        (
+            "(SELECT 1 AS id) UNION (SELECT id FROM t WHERE a = $1 LIMIT 1)",
+            derived("(SELECT 1 AS id) UNION (SELECT id FROM t WHERE a = $1 LIMIT 1)"),
+        ),
+    ] {
+        let paged = limited(statement(DbBackend::Postgres, sql, 1), 10, Some(5));
         assert_eq!(paged.sql, expected, "{sql}");
         assert_eq!(paged.values.map(|values| values.0.len()), Some(2));
     }

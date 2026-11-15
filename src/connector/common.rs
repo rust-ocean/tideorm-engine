@@ -60,21 +60,25 @@ where
 }
 
 /// Opens a pool on `connect` with `options`' pool settings, connecting now
-/// unless `options` ask for a lazy pool.
+/// unless `options` ask for a lazy pool, and then learning from a connection
+/// which server it reaches.
 pub(crate) async fn open_pool<DB: super::Driver>(
     options: &ConnectOptions,
     connect: <DB::Connection as driver::Connection>::Options,
 ) -> Result<super::DriverPoolConnection<DB>, DbErr> {
     let pool_options = options.driver_pool_options();
-    let pool = if options.connect_lazy {
-        pool_options.connect_lazy_with(connect)
-    } else {
-        pool_options
-            .connect_with(connect)
-            .await
-            .map_err(driver_error_to_conn_err)?
-    };
-    Ok(pool.into())
+    if options.connect_lazy {
+        return Ok(pool_options.connect_lazy_with(connect).into());
+    }
+    let pool: super::DriverPoolConnection<DB> = pool_options
+        .connect_with(connect)
+        .await
+        .map_err(driver_error_to_conn_err)?
+        .into();
+    if pool.server().is_none() {
+        pool.acquire().await?;
+    }
+    Ok(pool)
 }
 
 /// How long a pooled connection sits idle before a checkout pings it, unless

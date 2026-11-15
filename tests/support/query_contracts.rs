@@ -277,9 +277,46 @@ mod live {
     }
 
     async fn queries(url: &str) {
+        // A lazy pool learns its server from its first connection; SQLite is
+        // only ever itself.
+        let mut lazy = ConnectOptions::new(url);
+        lazy.max_connections(1).connect_lazy(true);
+        let lazy = Database::connect(lazy).await.unwrap();
+        let sqlite = lazy.get_database_backend() == DbBackend::SQLite;
+        assert_eq!(lazy.get_database_server().is_some(), sqlite);
+        lazy.execute_unprepared("SELECT 1").await.unwrap();
+        let server = lazy
+            .get_database_server()
+            .expect("a pool that ran a statement names its server");
+        assert_eq!(server.backend(), lazy.get_database_backend());
+        lazy.close().await.unwrap();
+        // A session pinned on a lazy pool names the pool's server too.
+        if !sqlite {
+            let mut lazy = ConnectOptions::new(url);
+            lazy.connect_lazy(true);
+            let lazy = Database::connect(lazy).await.unwrap();
+            let session = lazy.pin_session().await.unwrap();
+            assert_eq!(session.get_database_server(), Some(server));
+            assert_eq!(lazy.get_database_server(), Some(server));
+            session.close().await.unwrap();
+            lazy.close().await.unwrap();
+        }
+
         let mut options = ConnectOptions::new(url);
         options.max_connections(1);
         let mut conn = Database::connect(options).await.unwrap();
+        // An eager pool connects at once, so it names its server already, and
+        // so do its transactions.
+        assert_eq!(conn.get_database_server(), Some(server));
+        let txn = conn.begin().await.unwrap();
+        assert_eq!(txn.get_database_server(), Some(server));
+        txn.rollback().await.unwrap();
+        // Only a Vitess takes `SHOW VITESS_TARGET`, whatever version it is
+        // told to report.
+        if server.backend() == DbBackend::MySQL {
+            let vitess = conn.execute_unprepared("SHOW VITESS_TARGET").await.is_ok();
+            assert_eq!(vitess, server == DbServer::Vitess, "{server:?}");
+        }
         let backend = conn.get_database_backend();
         let stmt = statement(backend);
         let row = conn.query_one_raw(stmt.clone()).await.unwrap().unwrap();
@@ -357,6 +394,11 @@ mod live {
             ]
         );
         println!("QUERY_CONTRACT empty_error_metrics");
+        if server == DbServer::CockroachDb {
+            conn.execute_unprepared("SET experimental_enable_temp_tables = 'on'")
+                .await
+                .unwrap();
+        }
         conn.execute_unprepared(
             "CREATE TEMPORARY TABLE query_contract_rows (id BIGINT PRIMARY KEY, label TEXT)",
         )

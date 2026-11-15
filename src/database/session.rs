@@ -6,8 +6,8 @@ use driver::Connection;
 use futures_util::lock::Mutex;
 
 use crate::{
-    DatabaseConnection, DatabaseTransaction, DbBackend, DbErr, ExecResult, QueryResult, Statement,
-    TransactionOptions,
+    DatabaseConnection, DatabaseTransaction, DbBackend, DbErr, DbServer, ExecResult, QueryResult,
+    Statement, TransactionOptions,
     connector::{InnerConnection, backend, driver_error_to_conn_err, on_connection},
     database::SharedConnection,
     metric::Callback,
@@ -63,11 +63,11 @@ impl SessionConnection {
     }
 
     pub(crate) fn backend(&self) -> DbBackend {
-        if self.conn.is_mariadb() {
-            DbBackend::MariaDB
-        } else {
-            self.backend
-        }
+        self.conn.server().map_or(self.backend, DbServer::backend)
+    }
+
+    pub(crate) fn server(&self) -> Option<DbServer> {
+        self.conn.server()
     }
 
     /// The pool the session was opened from, always a pool, never a session.

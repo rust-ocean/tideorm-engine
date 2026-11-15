@@ -9,8 +9,8 @@ use tracing::instrument;
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
 use crate::connector::backend;
 use crate::{
-    ConnectionTrait, DbBackend, DbErr, ExecResult, QueryResult, Statement, TransactionOptions,
-    TransactionTrait,
+    ConnectionTrait, DbBackend, DbErr, DbServer, ExecResult, QueryResult, Statement,
+    TransactionOptions, TransactionTrait,
     connector::{InnerConnection, on_connection},
     database::SharedConnection,
     error::*,
@@ -386,11 +386,11 @@ impl Drop for DatabaseTransaction {
 impl ConnectionTrait for DatabaseTransaction {
     fn get_database_backend(&self) -> DbBackend {
         // The connection's handshake, read without locking it.
-        if self.conn.is_mariadb() {
-            DbBackend::MariaDB
-        } else {
-            self.backend
-        }
+        self.conn.server().map_or(self.backend, DbServer::backend)
+    }
+
+    fn get_database_server(&self) -> Option<DbServer> {
+        self.conn.server()
     }
 
     #[instrument(level = "trace", skip(stmt))]

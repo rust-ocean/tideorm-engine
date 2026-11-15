@@ -29,8 +29,9 @@ macro_rules! on_builder {
 }
 pub(crate) use on_builder;
 
-/// A database backend: the server a connection reaches. It decides how a
-/// statement renders (placeholders, quoting, `RETURNING`) and what it may use.
+/// A database backend: the SQL dialect a connection speaks. It decides how a
+/// statement renders (placeholders, quoting, `RETURNING`) and what it may use;
+/// [`DbServer`](crate::DbServer) names the server behind it.
 ///
 /// MySQL and MariaDB speak one protocol, and a connection tells them apart by
 /// what the server said when it opened: a MySQL-protocol pool answers

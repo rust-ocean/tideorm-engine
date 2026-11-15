@@ -5,7 +5,8 @@ use driver_core::transaction::{TransactionManager, TransactionState};
 
 use super::{DriverPoolConnection, InnerConnection, common::*};
 use crate::{
-    DatabaseConnection, DbBackend, DbErr, ExecResult, QueryResult, Statement, TransactionOptions,
+    DatabaseConnection, DbBackend, DbErr, DbServer, ExecResult, QueryResult, Statement,
+    TransactionOptions,
     metric::{self, Callback},
 };
 
@@ -25,11 +26,8 @@ pub trait Driver:
     /// `statement`'s values, encoded by the engine's binder.
     fn arguments(statement: &Statement) -> Result<Self::Arguments, driver::Error>;
 
-    /// Whether `connection` reaches MariaDB, as the server said when it
-    /// opened: only a MySQL connection can.
-    fn is_mariadb(_connection: &PoolConnection<Self>) -> bool {
-        false
-    }
+    /// The server `connection` reaches, as it said when it opened.
+    fn server(connection: &PoolConnection<Self>) -> DbServer;
 
     /// The engine's view of a statement's outcome.
     fn exec_result(result: Self::QueryResult) -> ExecResult;

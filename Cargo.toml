@@ -1,6 +1,6 @@
 [package]
 name = "tideorm-engine"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 rust-version = "1.94"
 description = "Internal execution engine for TideORM"
@@ -23,11 +23,11 @@ runtime-tokio = ["tideorm-driver?/runtime-tokio", "tideorm-driver?/tls-rustls"]
 runtime-async-std = ["tideorm-driver?/runtime-async-std", "tideorm-driver?/tls-rustls"]
 
 [dependencies]
-# The lowest versions that have what this crate uses (the builder's
-# `ValueType::COLUMN_KIND`, which TideORM's derive reads through this crate's
-# re-export, came in 0.1.2), so it raises no minimum further.
-tideorm-sql-builder = "0.1.2"
-tideorm-driver = { version = "0.1.0", optional = true }
+# The lowest versions that have what this crate uses: the builder's
+# CockroachDB-safe `IN` lists came in 0.1.3, and the drivers' `PgServer` and
+# `MySqlServer` in the driver 0.1.1 requires.
+tideorm-sql-builder = "0.1.3"
+tideorm-driver = { version = "0.1.1", optional = true }
 tideorm-driver-core = { version = "0.1.0", optional = true }
 thiserror = "2"
 chrono = { version = "0.4.30", features = ["serde"] }

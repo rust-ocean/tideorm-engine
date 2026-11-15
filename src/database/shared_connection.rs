@@ -5,10 +5,12 @@ use std::sync::{Arc, PoisonError};
 
 use futures_util::lock::{Mutex, MutexGuard};
 
+#[cfg(any(feature = "postgres", feature = "mysql"))]
+use crate::connector::Driver;
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
 use crate::connector::{backend, driver_error_to_conn_err};
 use crate::{
-    DbErr,
+    DbErr, DbServer,
     connector::{InnerConnection, on_connection},
 };
 
@@ -35,8 +37,8 @@ pub(crate) struct SharedConnection {
     /// failure that aborted it: every level of it then refuses statements,
     /// savepoints and commits, and only rolls back.
     aborted: std::sync::Mutex<Option<(String, Option<Arc<DbErr>>)>>,
-    /// Whether the connection reaches MariaDB.
-    mariadb: bool,
+    /// The server the connection reaches.
+    server: Option<DbServer>,
     /// The identity of the pool, or session, it was taken from.
     identity: u64,
 }
@@ -47,13 +49,20 @@ impl SharedConnection {
         allow(dead_code)
     )]
     pub(crate) fn new(connection: InnerConnection, identity: u64) -> Self {
-        let (mariadb, exact_levels) = match &connection {
+        let (server, exact_levels) = match &connection {
             #[cfg(feature = "mysql")]
-            InnerConnection::MySql(connection) => (connection.is_mariadb(), false),
+            InnerConnection::MySql(connection) => {
+                (Some(<driver::MySql as Driver>::server(connection)), false)
+            }
+            #[cfg(feature = "postgres")]
+            InnerConnection::Postgres(connection) => (
+                Some(<driver::Postgres as Driver>::server(connection)),
+                false,
+            ),
             #[cfg(feature = "sqlite")]
-            InnerConnection::Sqlite(_) => (false, true),
+            InnerConnection::Sqlite(_) => (Some(DbServer::Sqlite), true),
             #[allow(unreachable_patterns)]
-            _ => (false, false),
+            _ => (None, false),
         };
         Self {
             connection: Mutex::new(connection),
@@ -61,7 +70,7 @@ impl SharedConnection {
             unsettled: AtomicBool::new(false),
             exact_levels,
             aborted: std::sync::Mutex::new(None),
-            mariadb,
+            server,
             identity,
         }
     }
@@ -71,10 +80,9 @@ impl SharedConnection {
         self.identity
     }
 
-    /// Whether the connection reaches MariaDB, as the server said when it
-    /// opened.
-    pub(crate) fn is_mariadb(&self) -> bool {
-        self.mariadb
+    /// The server the connection reaches, as it said when it opened.
+    pub(crate) fn server(&self) -> Option<DbServer> {
+        self.server
     }
 
     /// Wait for the connection, then queue the rollbacks left for it.

@@ -25,21 +25,27 @@ pub(super) fn wrap(mut statement: Statement, projection: &str) -> Statement {
 
 /// At most `limit` rows of the raw `statement`, from the `offset`th on.
 ///
-/// On MySQL, MariaDB and SQLite the bounds follow the query itself, which
-/// keeps its column names: a derived table refuses a name two columns share
-/// on the first two, and SQLite renames the second `name:1`. A query with a
-/// `LIMIT`, `OFFSET` or `FETCH` of its own is read as a derived table, as it
-/// always is on PostgreSQL, which keeps such names. The bounds go before a
+/// The bounds follow the query itself, which keeps its order and its column
+/// names: CockroachDB drops the `ORDER BY` of a derived table without a
+/// `LIMIT`, MySQL and MariaDB refuse a name two of its columns share, and
+/// SQLite renames the second `name:1`. Only a query with a `LIMIT`, `OFFSET`
+/// or `FETCH` of its own is read as a derived table. The bounds go before a
 /// row lock (`FOR UPDATE`, `LOCK IN SHARE MODE`), which MySQL takes last. The
 /// limit is written and the offset bound, after the statement's own values.
 pub(super) fn limited(mut statement: Statement, limit: u64, offset: Option<u64>) -> Statement {
     let backend = statement.db_backend;
     let sql = trim_raw_statement(&statement.sql, backend);
-    let (mut limited, lock) = if backend == DbBackend::Postgres || bounds_its_rows(sql, backend) {
+    let (mut limited, lock) = if bounds_its_rows(sql, backend) {
         (format!("SELECT * {} LIMIT {limit}", derived_table(sql)), "")
     } else {
         let (query, lock) = sql.split_at(locking_clause(sql, backend).unwrap_or(sql.len()));
-        (format!("{} LIMIT {limit}", query.trim_end()), lock)
+        // The whitespace before a lock stays: it may end a line comment.
+        let space = if query.ends_with(char::is_whitespace) {
+            ""
+        } else {
+            " "
+        };
+        (format!("{query}{space}LIMIT {limit}"), lock)
     };
     if let Some(offset) = offset {
         limited.push_str(" OFFSET ");
@@ -62,23 +68,45 @@ pub(super) fn limited(mut statement: Statement, limit: u64, offset: Option<u64>)
     statement
 }
 
-/// Whether the raw query sets a `LIMIT`, `OFFSET` or `FETCH` outside every
-/// parenthesis, after which another `LIMIT` is a syntax error.
+/// Whether the raw query sets a `LIMIT`, `OFFSET` or `FETCH` of its own,
+/// after which another is a syntax error: outside every parenthesis, or on
+/// PostgreSQL inside the parentheses of a whole query operand, such as
+/// `(SELECT .. LIMIT 5)`, which it merges into the query around them.
 fn bounds_its_rows(sql: &str, backend: DbBackend) -> bool {
     let mut depth = 0usize;
-    tokens(sql, backend.into()).any(|token| {
+    // How many of the open parentheses, from the outermost, hold an operand.
+    let mut operands = 0usize;
+    let mut previous: Option<Token<'_>> = None;
+    for token in tokens(sql, backend.into()) {
+        if matches!(token.kind, Kind::Space | Kind::Comment) {
+            continue;
+        }
         if token.is_symbol(&["("]) {
+            if backend == DbBackend::Postgres
+                && depth == operands
+                && previous.is_none_or(|previous| {
+                    previous.is_symbol(&["(", ")"])
+                        || previous.is_word(&["UNION", "INTERSECT", "EXCEPT", "ALL", "DISTINCT"])
+                })
+            {
+                operands += 1;
+            }
             depth += 1;
         } else if token.is_symbol(&[")"]) {
+            operands = operands.min(depth.saturating_sub(1));
             depth = depth.saturating_sub(1);
+        } else if depth <= operands && token.is_word(&["LIMIT", "OFFSET", "FETCH"]) {
+            return true;
         }
-        depth == 0 && token.is_word(&["LIMIT", "OFFSET", "FETCH"])
-    })
+        previous = Some(token);
+    }
+    false
 }
 
 /// Where the raw query's row lock starts, outside every parenthesis: a
-/// `FOR UPDATE` or `FOR SHARE` (with its `OF`, `NOWAIT` or `SKIP LOCKED`), or
-/// MySQL's `LOCK IN SHARE MODE`.
+/// `FOR UPDATE` or `FOR SHARE` (with its `OF`, `NOWAIT` or `SKIP LOCKED`),
+/// PostgreSQL's `FOR NO KEY UPDATE` and `FOR KEY SHARE`, or MySQL's
+/// `LOCK IN SHARE MODE`.
 fn locking_clause(sql: &str, backend: DbBackend) -> Option<usize> {
     let mut depth = 0usize;
     let mut previous: Option<Token<'_>> = None;
@@ -92,7 +120,7 @@ fn locking_clause(sql: &str, backend: DbBackend) -> Option<usize> {
             depth = depth.saturating_sub(1);
         } else if depth == 0
             && let Some(first) = previous
-            && (first.is_word(&["FOR"]) && token.is_word(&["UPDATE", "SHARE"])
+            && (first.is_word(&["FOR"]) && token.is_word(&["UPDATE", "SHARE", "NO", "KEY"])
                 || first.is_word(&["LOCK"]) && token.is_word(&["IN"]))
         {
             return Some(first.start);
