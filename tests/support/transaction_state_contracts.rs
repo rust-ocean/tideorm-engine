@@ -220,3 +220,74 @@ fn sqlite_refuses_read_only_transactions() {
             db.close().await.unwrap();
         });
 }
+
+/// A statement on a transaction while a savepoint is open in it waits for the
+/// savepoint to end. It used to run inside the savepoint, and was rolled back
+/// with it.
+#[test]
+fn a_statement_waits_for_an_open_savepoint() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let db = Database::connect("sqlite::memory:").await.unwrap();
+            db.execute_unprepared("CREATE TABLE items(id INTEGER PRIMARY KEY)")
+                .await
+                .unwrap();
+            let tx = db.begin().await.unwrap();
+            let savepoint = tx.begin().await.unwrap();
+            savepoint
+                .execute_unprepared("INSERT INTO items VALUES (1)")
+                .await
+                .unwrap();
+            let rollback = async {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                savepoint.rollback().await
+            };
+            let (parent, rollback) = futures_util::future::join(
+                tx.execute_unprepared("INSERT INTO items VALUES (2)"),
+                rollback,
+            )
+            .await;
+            parent.unwrap();
+            rollback.unwrap();
+            tx.commit().await.unwrap();
+            let kept = db
+                .query_one_raw(Statement::from_string(
+                    DbBackend::SQLite,
+                    "SELECT group_concat(id) AS ids FROM items",
+                ))
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(kept.try_get::<String>("ids").unwrap(), "2");
+            db.close().await.unwrap();
+        });
+}
+
+/// A transaction rolled back while a savepoint of it is still held refuses
+/// its statements at once, instead of waiting for that savepoint to end.
+#[test]
+fn an_ended_transaction_refuses_without_waiting_for_its_savepoint() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let db = Database::connect("sqlite::memory:").await.unwrap();
+            let tx = db.begin().await.unwrap();
+            let savepoint = tx.begin().await.unwrap();
+            tx.rollback_by_ref().await.unwrap();
+            let refused = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                tx.execute_unprepared("SELECT 1"),
+            )
+            .await
+            .expect("an ended transaction must not wait for its savepoint");
+            assert!(refused.is_err());
+            // Closing the pool waits for the connection they hold.
+            drop((savepoint, tx));
+            db.close().await.unwrap();
+        });
+}

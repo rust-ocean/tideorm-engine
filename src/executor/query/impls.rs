@@ -15,9 +15,23 @@ where
     Index: driver::ColumnIndex<R>,
     T: driver::Type<R::Database> + driver::Decode<'r, R::Database>,
 {
+    column_opt(row, index, idx)?.ok_or_else(|| err_null_idx_col(idx))
+}
+
+/// Column `index` of `row` as a `T`, `None` for SQL `NULL`.
+#[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
+pub(super) fn column_opt<'r, R, T, Index>(
+    row: &'r R,
+    index: Index,
+    idx: impl ColIdx,
+) -> Result<Option<T>, TryGetError>
+where
+    R: Row,
+    Index: driver::ColumnIndex<R>,
+    T: driver::Type<R::Database> + driver::Decode<'r, R::Database>,
+{
     row.try_get::<Option<T>, _>(index)
         .map_err(|e| err_read_idx_col(idx, e))
-        .and_then(|value| value.ok_or_else(|| err_null_idx_col(idx)))
 }
 
 /// `T` as converted from the `from` a driver returned.
@@ -44,6 +58,14 @@ macro_rules! try_getable_all {
             #[allow(unused_variables)]
             fn try_get_by<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Self, TryGetError> {
                 on_row!(&res.row, idx, |row, index| column(row, index, idx))
+            }
+
+            #[allow(unused_variables)]
+            fn try_get_opt_by<I: ColIdx>(
+                res: &QueryResult,
+                idx: I,
+            ) -> Result<Option<Self>, TryGetError> {
+                on_row!(&res.row, idx, |row, index| column_opt(row, index, idx))
             }
         }
     )+};
@@ -160,6 +182,15 @@ macro_rules! try_getable_uuid {
         impl TryGetable for $type {
             fn try_get_by<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Self, TryGetError> {
                 uuid_column(res, idx).map($conversion_fn)
+            }
+
+            #[allow(unused_variables)]
+            fn try_get_opt_by<I: ColIdx>(
+                res: &QueryResult,
+                idx: I,
+            ) -> Result<Option<Self>, TryGetError> {
+                on_row!(&res.row, idx, |row, index| column_opt(row, index, idx)
+                    .map(|uuid: Option<uuid::Uuid>| uuid.map($conversion_fn)))
             }
         }
     };

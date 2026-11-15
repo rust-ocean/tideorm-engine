@@ -32,6 +32,10 @@ use crate::{
 /// one is open is refused and rolls them all back. A nested transaction whose
 /// enclosing one ended refuses its statements, and its commit fails.
 ///
+/// A statement on a transaction waits while a savepoint begun from it is
+/// open, so it never runs inside that savepoint: end the savepoint before
+/// using the enclosing transaction again in the same task.
+///
 /// Dropped before it ends, it rolls back: at once when its connection is
 /// free, and otherwise before the next statement on it. On PostgreSQL and
 /// MySQL, a savepoint dropped while it commits or rolls back leaves its
@@ -57,8 +61,8 @@ pub struct DatabaseTransaction {
     /// [`OPEN`], [`ENDING`] while it commits or rolls back, or [`ENDED`].
     state: AtomicU8,
     metric_callback: Option<Callback>,
-    /// Taken by each savepoint opened in it until that one ends; see
-    /// [`nested`](Self::nested).
+    /// Taken by each savepoint opened in it until that one ends, and by each
+    /// of its own statements while it runs; see [`nested`](Self::nested).
     savepoints: Arc<Mutex<()>>,
     /// For a savepoint, the enclosing transaction's `savepoints`, held until
     /// it ends. Fields drop after [`Drop::drop`], so a savepoint waiting
@@ -289,11 +293,21 @@ impl DatabaseTransaction {
         Ok(connection)
     }
 
-    /// The connection, for a statement, unless the transaction was aborted.
-    async fn statement_connection(&self) -> Result<MutexGuard<'_, InnerConnection>, DbErr> {
+    /// The connection, for a statement, unless the transaction was aborted,
+    /// with the transaction's slot: a statement waits for a savepoint open in
+    /// it to end, as another savepoint does, or it would run inside that one
+    /// and be rolled back with it.
+    async fn statement_connection(
+        &self,
+    ) -> Result<(MutexGuard<'_, ()>, MutexGuard<'_, InnerConnection>), DbErr> {
+        // An ended transaction fails now, not after a savepoint it left open.
+        self.ensure_open()?;
+        self.conn.ensure_current(self.depth, self.serial)?;
+        self.conn.ensure_not_aborted()?;
+        let turn = self.savepoints.lock().await;
         let connection = self.connection().await?;
         self.conn.ensure_not_aborted()?;
-        Ok(connection)
+        Ok((turn, connection))
     }
 
     /// Abort the transaction when the failure of a statement abandoned all of
@@ -382,7 +396,8 @@ impl ConnectionTrait for DatabaseTransaction {
     #[instrument(level = "trace", skip(stmt))]
     #[allow(unused_variables)]
     async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
-        let connection = &mut *self.statement_connection().await?;
+        let (_turn, mut connection) = self.statement_connection().await?;
+        let connection = &mut *connection;
         let result = on_connection!(connection, connection => {
             backend::execute(connection, &stmt, self.metric_callback.as_ref()).await
         });
@@ -392,7 +407,8 @@ impl ConnectionTrait for DatabaseTransaction {
     #[instrument(level = "trace", skip(sql))]
     #[allow(unused_variables)]
     async fn execute_unprepared(&self, sql: &str) -> Result<ExecResult, DbErr> {
-        let connection = &mut *self.statement_connection().await?;
+        let (_turn, mut connection) = self.statement_connection().await?;
+        let connection = &mut *connection;
         let result = on_connection!(connection, connection => {
             backend::execute_unprepared(connection, sql, self.metric_callback.as_ref()).await
         });
@@ -402,7 +418,8 @@ impl ConnectionTrait for DatabaseTransaction {
     #[instrument(level = "trace", skip(stmt))]
     #[allow(unused_variables)]
     async fn query_one_raw(&self, stmt: Statement) -> Result<Option<QueryResult>, DbErr> {
-        let connection = &mut *self.statement_connection().await?;
+        let (_turn, mut connection) = self.statement_connection().await?;
+        let connection = &mut *connection;
         let result = on_connection!(connection, connection => {
             backend::query_one(connection, &stmt, self.metric_callback.as_ref()).await
         });
@@ -412,7 +429,8 @@ impl ConnectionTrait for DatabaseTransaction {
     #[instrument(level = "trace", skip(stmt))]
     #[allow(unused_variables)]
     async fn query_all_raw(&self, stmt: Statement) -> Result<Vec<QueryResult>, DbErr> {
-        let connection = &mut *self.statement_connection().await?;
+        let (_turn, mut connection) = self.statement_connection().await?;
+        let connection = &mut *connection;
         let result = on_connection!(connection, connection => {
             backend::query_all(connection, &stmt, self.metric_callback.as_ref()).await
         });

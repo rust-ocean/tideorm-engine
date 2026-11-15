@@ -76,6 +76,17 @@ pub trait TryGetable: Sized {
     fn try_get_by_index(res: &QueryResult, index: usize) -> Result<Self, TryGetError> {
         Self::try_get_by(res, index)
     }
+
+    /// The value at `index`, `None` for SQL `NULL`. A type the drivers
+    /// decode directly overrides it, so a `NULL` builds no error.
+    #[doc(hidden)]
+    fn try_get_opt_by<I: ColIdx>(res: &QueryResult, index: I) -> Result<Option<Self>, TryGetError> {
+        match Self::try_get_by(res, index) {
+            Ok(value) => Ok(Some(value)),
+            Err(TryGetError::Null(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
 }
 
 impl From<TryGetError> for DbErr {
@@ -245,11 +256,9 @@ impl Debug for QueryResultRow {
 
 impl<T: TryGetable> TryGetable for Option<T> {
     fn try_get_by<I: ColIdx>(res: &QueryResult, index: I) -> Result<Self, TryGetError> {
-        match T::try_get_by(res, index) {
-            Ok(v) => Ok(Some(v)),
-            Err(TryGetError::Null(_)) => Ok(None),
+        match T::try_get_opt_by(res, index) {
             Err(TryGetError::DbErr(err)) if is_column_not_found(&err) => Ok(None),
-            Err(e) => Err(e),
+            read => read,
         }
     }
 }
@@ -272,13 +281,11 @@ pub fn __read_model_field<T: TryGetable>(
     res: &QueryResult,
     col: &str,
 ) -> Result<Option<T>, TryGetError> {
-    match T::try_get_by(res, col) {
-        Ok(value) => Ok(Some(value)),
-        Err(TryGetError::Null(_)) => Ok(None),
+    match T::try_get_opt_by(res, col) {
         Err(TryGetError::DbErr(err)) if is_column_not_found(&err) => Err(TryGetError::DbErr(
             type_err(format!("Missing value for column '{col}'")),
         )),
-        Err(err) => Err(err),
+        read => read,
     }
 }
 
