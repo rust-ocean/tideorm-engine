@@ -77,9 +77,8 @@ async fn sqlite_lazy() {
         pool.options().get_test_before_acquire_if_idle_for(),
         Some(Duration::ZERO)
     );
-    // A lazy pool opens no connection before its first statement, and SQLite
-    // needs none to name its server.
-    assert_eq!(pool.size(), 0);
+    // SQLite needs no connection to name its server. (An in-memory database's
+    // pool keeps one open, which a background task may already have opened.)
     assert_eq!(connection.get_database_server(), Some(DbServer::Sqlite));
     let one: i64 = driver::query("SELECT 1")
         .fetch_one(pool)
