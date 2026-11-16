@@ -37,6 +37,25 @@ impl DbServer {
             Self::Sqlite => DbBackend::SQLite,
         }
     }
+
+    /// The server's `db.system.name` in OpenTelemetry's semantic
+    /// conventions, or its own lowercase name where they list none.
+    #[cfg_attr(
+        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
+        allow(dead_code)
+    )]
+    pub(crate) fn system_name(self) -> &'static str {
+        match self {
+            Self::Postgres => "postgresql",
+            Self::CockroachDb => "cockroachdb",
+            Self::YugabyteDb => "yugabytedb",
+            Self::MySql => "mysql",
+            Self::MariaDb => "mariadb",
+            Self::TiDb => "tidb",
+            Self::Vitess => "vitess",
+            Self::Sqlite => "sqlite",
+        }
+    }
 }
 
 impl std::fmt::Display for DbServer {

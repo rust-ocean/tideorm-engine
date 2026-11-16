@@ -20,3 +20,6 @@ mod session;
 
 #[path = "support/mysql_reply_contracts.rs"]
 mod mysql_replies;
+
+#[path = "support/span_contracts.rs"]
+mod spans;

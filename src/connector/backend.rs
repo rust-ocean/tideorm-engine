@@ -2,6 +2,7 @@ use std::future::Future;
 
 use driver::{Executor, pool::PoolConnection};
 use driver_core::transaction::{TransactionManager, TransactionState};
+use futures_util::TryStreamExt;
 
 use super::{DriverPoolConnection, InnerConnection, common::*};
 use crate::{
@@ -72,8 +73,10 @@ pub(crate) async fn execute<DB: Driver>(
     statement: &Statement,
     metric: Option<&Callback>,
 ) -> Result<ExecResult, DbErr> {
+    let span = metric::span(DB::server(connection), Some(&statement.sql));
     let query = driver_query_with(&statement.sql, DB::arguments(statement));
     metric::observed(
+        span,
         metric.zip(Some(statement)),
         async {
             query
@@ -94,8 +97,10 @@ pub(crate) async fn execute_unprepared<DB: Driver>(
     metric: Option<&Callback>,
 ) -> Result<ExecResult, DbErr> {
     let statement = metric.map(|_| Statement::from_string(DB::BACKEND, sql));
+    let span = metric::span(DB::server(connection), None);
     let observer = metric.zip(statement.as_ref());
     metric::observed(
+        span,
         observer,
         async {
             connection
@@ -116,8 +121,10 @@ pub(crate) async fn query_one<DB: Driver>(
     statement: &Statement,
     metric: Option<&Callback>,
 ) -> Result<Option<QueryResult>, DbErr> {
+    let span = metric::span(DB::server(connection), Some(&statement.sql));
     let query = driver_query_with(&statement.sql, DB::arguments(statement));
     metric::observed(
+        span,
         metric.zip(Some(statement)),
         async {
             query
@@ -137,14 +144,18 @@ pub(crate) async fn query_all<DB: Driver>(
     statement: &Statement,
     metric: Option<&Callback>,
 ) -> Result<Vec<QueryResult>, DbErr> {
+    let span = metric::span(DB::server(connection), Some(&statement.sql));
     let query = driver_query_with(&statement.sql, DB::arguments(statement));
     metric::observed(
+        span,
         metric.zip(Some(statement)),
         async {
+            // Mapped as they stream in: one vector of rows, not two.
             query
-                .fetch_all(connection.executor())
+                .fetch(connection.executor())
+                .map_ok(DB::query_result)
+                .try_collect()
                 .await
-                .map(|rows| rows.into_iter().map(DB::query_result).collect())
                 .map_err(driver_error_to_query_err)
         },
         |rows: &Vec<QueryResult>| rows.len() as u64,
