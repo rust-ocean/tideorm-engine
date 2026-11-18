@@ -481,3 +481,32 @@ mod live {
         async_std::task::block_on(run());
     }
 }
+
+/// SQLite keeps a decimal as text: one whose digits a `Decimal` cannot all hold is refused, not
+/// rounded, while the zeros ending a long fraction are dropped.
+#[cfg(all(feature = "sqlite", feature = "runtime-tokio"))]
+#[test]
+fn sqlite_text_decimals_are_read_exactly() {
+    use rust_decimal::Decimal;
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let db = Database::connect("sqlite::memory:").await.unwrap();
+            let rows = db
+                .query_all_raw(Statement::from_string(
+                    DbBackend::SQLite,
+                    "SELECT '1.500000000000000000000000000000' AS kept, \
+                     '0.123456789012345678901234567890' AS rounded",
+                ))
+                .await
+                .unwrap();
+            assert_eq!(
+                rows[0].try_get::<Decimal>("kept").unwrap(),
+                Decimal::new(15, 1)
+            );
+            assert!(rows[0].try_get::<Decimal>("rounded").is_err());
+        });
+}

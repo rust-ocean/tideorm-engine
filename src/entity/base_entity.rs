@@ -73,16 +73,16 @@ pub trait EntityName: IdenStatic + Default {
 /// [`delete`](Self::delete), [`delete_many`](Self::delete_many),
 /// [`delete_by_id`](Self::delete_by_id).
 pub trait EntityTrait: EntityName {
-    #[allow(missing_docs)]
+    /// The row type: what a query of this entity decodes each row into.
     type Model: ModelTrait<Entity = Self> + FromQueryResult;
 
-    #[allow(missing_docs)]
+    /// The write type: a row whose columns are each set or left unset.
     type ActiveModel: ActiveModelTrait<Entity = Self>;
 
-    #[allow(missing_docs)]
+    /// The entity's columns.
     type Column: ColumnTrait;
 
-    #[allow(missing_docs)]
+    /// The entity's primary-key columns.
     type PrimaryKey: PrimaryKeyTrait + PrimaryKeyToColumn<Column = Self::Column>;
 
     /// Construct select statement to find one / all models

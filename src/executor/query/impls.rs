@@ -123,7 +123,8 @@ try_getable_byte!(i8 => i16, u8 => u16);
 use rust_decimal::Decimal;
 
 /// SQLite has no decimal type: a decimal is read as the value is stored,
-/// text and integers exactly and a real through `f64`.
+/// text and integers exactly (text a `Decimal` cannot hold is an error, not
+/// rounded) and a real through `f64`.
 impl TryGetable for Decimal {
     #[allow(unused_variables)]
     fn try_get_by<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Self, TryGetError> {
@@ -153,11 +154,11 @@ fn sqlite_decimal<I: ColIdx>(
     match raw.type_info().name() {
         "TEXT" => {
             let text: String = column(row, idx.as_sqlite_index(), idx)?;
-            text.trim().parse().map_err(|e| {
+            driver::types::decimal_from_text(text.trim()).map_err(|e| {
                 DbErr::TryIntoErr {
                     from: "String",
                     into: "Decimal",
-                    source: Arc::new(e),
+                    source: Arc::from(e),
                 }
                 .into()
             })

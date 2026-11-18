@@ -1,6 +1,6 @@
 [package]
 name = "tideorm-engine"
-version = "0.1.7"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.94"
 description = "Internal execution engine for TideORM"
@@ -23,12 +23,11 @@ runtime-tokio = ["tideorm-driver?/runtime-tokio", "tideorm-driver?/tls-rustls"]
 runtime-async-std = ["tideorm-driver?/runtime-async-std", "tideorm-driver?/tls-rustls"]
 
 [dependencies]
-# The lowest versions that have what this crate uses: the builder's
-# CockroachDB-safe `IN` lists came in 0.1.3, and the drivers' `PgServer` and
-# `MySqlServer` in the driver 0.1.1 requires.
-tideorm-sql-builder = "0.1.3"
-tideorm-driver = { version = "0.1.1", optional = true }
-tideorm-driver-core = { version = "0.1.0", optional = true }
+# The builder and drivers move with the engine: 0.2 is the release whose
+# drivers read decimal text exactly (`driver::types::decimal_from_text`).
+tideorm-sql-builder = "0.2.0"
+tideorm-driver = { version = "0.2.0", optional = true }
+tideorm-driver-core = { version = "0.2.0", optional = true }
 thiserror = "2"
 chrono = { version = "0.4.30", features = ["serde"] }
 serde_json = "1.0"

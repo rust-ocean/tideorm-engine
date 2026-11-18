@@ -415,14 +415,14 @@ mod live {
             assert_eq!(pages.num_items().await.unwrap(), 3);
             assert_eq!(raw(query).count(&db).await.unwrap(), 3);
         }
-        // A query setting no bounds of its own is paged as written, so its
-        // columns keep names they share and a CTE runs on MariaDB too.
+        // A query setting no bounds of its own is paged as written, so a CTE
+        // runs on MariaDB too, and its columns keep names they share (below).
         for sql in [
             format!(
                 "WITH chosen AS (SELECT id FROM pagination_rows WHERE id >= {placeholder}) SELECT id FROM chosen ORDER BY id"
             ),
             format!(
-                "/* 🌊 LIMIT */ SELECT id, id FROM pagination_rows WHERE id >= {placeholder} ORDER BY id; -- trailing comment"
+                "/* 🌊 LIMIT */ SELECT id, id AS same_id FROM pagination_rows WHERE id >= {placeholder} ORDER BY id; -- trailing comment"
             ),
             format!(
                 "SELECT id FROM (SELECT id FROM pagination_rows WHERE id >= {placeholder} ORDER BY id LIMIT 4) AS chosen ORDER BY id DESC"

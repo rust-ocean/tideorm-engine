@@ -9,7 +9,7 @@ use std::borrow::Cow;
 pub(crate) mod macros {
     macro_rules! bind_oper {
         ($vis:vis $op:ident, $bin_op:ident) => {
-            #[allow(missing_docs)]
+            #[doc = concat!("This column and `v` under [`BinOper::", stringify!($bin_op), "`]; an enum column casts `v` to its type.")]
             $vis fn $op<V>(&self, v: V) -> Expr
             where
                 V: Into<Value>,
@@ -31,7 +31,8 @@ pub(crate) mod macros {
 
     macro_rules! bind_vec_func {
         ($vis:vis $func:ident) => {
-            #[allow(missing_docs)]
+            /// Applies the [`Expr`] method of the same name to this column and the
+            /// values of `v`; an enum column casts each to its type.
             #[allow(clippy::wrong_self_convention)]
             $vis fn $func<V, I>(&self, v: I) -> Expr
             where
@@ -46,8 +47,9 @@ pub(crate) mod macros {
 
     macro_rules! bind_subquery_func {
         ($vis:vis $func:ident) => {
+            /// Applies the [`Expr`] method of the same name to this column and the
+            /// subquery `s`.
             #[allow(clippy::wrong_self_convention)]
-            #[allow(missing_docs)]
             $vis fn $func(&self, s: SelectStatement) -> Expr {
                 Expr::col(self.as_column_ref()).$func(s)
             }
