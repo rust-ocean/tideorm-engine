@@ -1,6 +1,6 @@
 [package]
 name = "tideorm-engine"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.94"
 description = "Internal execution engine for TideORM"
@@ -24,8 +24,9 @@ runtime-async-std = ["tideorm-driver?/runtime-async-std", "tideorm-driver?/tls-r
 
 [dependencies]
 # The builder and drivers move with the engine: 0.2 is the release whose
-# drivers read decimal text exactly (`driver::types::decimal_from_text`).
-tideorm-sql-builder = "0.2.0"
+# drivers read decimal text exactly (`driver::types::decimal_from_text`);
+# builder 0.2.1 is the one whose JSON number comparisons SQLite 3.54 runs.
+tideorm-sql-builder = "0.2.1"
 tideorm-driver = { version = "0.2.0", optional = true }
 tideorm-driver-core = { version = "0.2.0", optional = true }
 thiserror = "2"
