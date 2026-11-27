@@ -1,5 +1,5 @@
 use super::select::ColumnSelectExt;
-use crate::{ColumnAsExpr, ColumnTrait, IntoIdentity, IntoSimpleExpr};
+use crate::{ColumnAsExpr, ColumnTrait, Identity, IntoIdentity, IntoSimpleExpr};
 pub use sql_builder::{
     Condition, ConditionalStatement, DynIden, JoinType, Order, OrderedStatement,
 };
@@ -9,6 +9,19 @@ use sql_builder::{
 };
 
 use sql_builder::IntoColumnRef;
+
+/// `alias` as the one name a select expression goes by; a composite
+/// identity's names run together (`ab` for `(a, b)`).
+fn alias_iden(alias: impl IntoIdentity) -> DynIden {
+    match alias.into_identity() {
+        Identity::Unary(name) => name,
+        composite => composite
+            .iter()
+            .map(ToString::to_string)
+            .collect::<String>()
+            .into(),
+    }
+}
 
 /// Methods for narrowing a query's projection, locking its rows, and adding
 /// `GROUP BY` / `HAVING` clauses. Implemented for [`Select`](crate::Select).
@@ -44,7 +57,7 @@ pub trait QuerySelect: Sized {
     {
         self.query().expr(SelectExpr {
             expr: col.into_column_as_expr(),
-            alias: Some(DynIden::from(alias.into_identity())),
+            alias: Some(alias_iden(alias)),
             window: None,
         });
         self
@@ -178,7 +191,7 @@ pub trait QuerySelect: Sized {
         T: Into<SimpleExpr>,
         A: IntoIdentity,
     {
-        self.query().expr_as(expr, alias.into_identity());
+        self.query().expr_as(expr, alias_iden(alias));
         self
     }
 
@@ -190,7 +203,7 @@ pub trait QuerySelect: Sized {
         A: IntoIdentity,
     {
         self.query()
-            .expr_as(Expr::col((tbl, col)), alias.into_identity());
+            .expr_as(Expr::col((tbl, col)), alias_iden(alias));
         self
     }
 }

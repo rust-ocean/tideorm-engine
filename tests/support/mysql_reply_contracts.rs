@@ -238,9 +238,9 @@ async fn cancelled_prepare(url: &str) {
     let mut options = ConnectOptions::new(
         proxied
             .as_str()
-            .parse::<tideorm_engine::driver::mysql::MySqlConnectOptions>()
+            .parse::<driver::mysql::MySqlConnectOptions>()
             .unwrap()
-            .ssl_mode(tideorm_engine::driver::mysql::MySqlSslMode::Disabled),
+            .ssl_mode(driver::mysql::MySqlSslMode::Disabled),
     );
     // No checkout ping, whose reply the gate would hold.
     options

@@ -11,6 +11,11 @@
     clippy::print_stderr,
     clippy::print_stdout
 )]
+// Without a backend there is nothing to run statements on, so most of the crate goes unused.
+#![cfg_attr(
+    not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
+    allow(dead_code, unreachable_code, unused_imports)
+)]
 
 mod connector;
 mod database;
@@ -38,7 +43,6 @@ macro_rules! debug_print {
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
 mod binding;
 
-#[allow(unused_imports)]
 pub use connector::*;
 pub use database::*;
 pub use entity::*;

@@ -1,7 +1,6 @@
 use crate::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, Iterable,
-    PrimaryKeyToColumn, PrimaryKeyTrait, QueryFilter, QueryTrait, query::column_tuple_in_condition,
-    sql_builder::IntoValueTuple,
+    PrimaryKeyToColumn, QueryFilter, QueryTrait,
 };
 use core::marker::PhantomData;
 use sql_builder::DeleteStatement;
@@ -105,90 +104,5 @@ impl Delete {
     }
 }
 
-impl<E> QueryFilter for ValidatedDeleteOne<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = DeleteStatement;
-
-    fn query(&mut self) -> &mut DeleteStatement {
-        &mut self.query
-    }
-}
-
-impl<E> QueryFilter for DeleteMany<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = DeleteStatement;
-
-    fn query(&mut self) -> &mut DeleteStatement {
-        &mut self.query
-    }
-}
-
-impl<E> DeleteMany<E>
-where
-    E: EntityTrait,
-{
-    /// Filter by vector of IDs by primary key
-    ///
-    /// # Panics
-    ///
-    /// Should not panic.
-    pub fn filter_by_ids<I>(mut self, values: I) -> Self
-    where
-        I: IntoIterator<Item = <E::PrimaryKey as PrimaryKeyTrait>::ValueType>,
-    {
-        self.query.cond_where(
-            column_tuple_in_condition(
-                &E::default().table_ref(),
-                &E::primary_key_identity(),
-                &values
-                    .into_iter()
-                    .map(|v| v.into_value_tuple())
-                    .collect::<Vec<_>>(),
-            )
-            .expect("trait bound ensured arity"),
-        );
-        self
-    }
-}
-
-impl<E> QueryTrait for ValidatedDeleteOne<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = DeleteStatement;
-
-    fn query(&mut self) -> &mut DeleteStatement {
-        &mut self.query
-    }
-
-    fn as_query(&self) -> &DeleteStatement {
-        &self.query
-    }
-
-    fn into_query(self) -> DeleteStatement {
-        self.query
-    }
-}
-
-impl<E> QueryTrait for DeleteMany<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = DeleteStatement;
-
-    fn query(&mut self) -> &mut DeleteStatement {
-        &mut self.query
-    }
-
-    fn as_query(&self) -> &DeleteStatement {
-        &self.query
-    }
-
-    fn into_query(self) -> DeleteStatement {
-        self.query
-    }
-}
+builds_statement!(DeleteStatement, ValidatedDeleteOne<E: EntityTrait>, filtered);
+builds_statement!(DeleteStatement, DeleteMany<E: EntityTrait>, filtered);

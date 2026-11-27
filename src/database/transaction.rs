@@ -115,7 +115,7 @@ impl DatabaseTransaction {
                 conn.clear_abort();
             }
             on_connection!(connection, connection => {
-                backend::Driver::begin(connection, options).await
+                backend::begin(connection, options).await
             })?;
             conn.opened(parent)?
         };
@@ -161,20 +161,6 @@ impl DatabaseTransaction {
         })
     }
 
-    /// Whether a failed statement has aborted this transaction on the server,
-    /// which then refuses every statement and answers `COMMIT` with a
-    /// rollback: PostgreSQL's "current transaction is aborted". The other
-    /// backends keep a transaction going after a failed statement.
-    ///
-    /// It reads the replies still pending on the connection and sends no SQL.
-    /// Fails once the transaction has been committed or rolled back.
-    pub async fn has_server_transaction_failed(&self) -> Result<bool, DbErr> {
-        let mut connection = self.connection().await?;
-        on_connection!(&mut *connection, connection => {
-            backend::transaction_failed(connection).await
-        })
-    }
-
     /// Commit a transaction
     #[instrument(level = "trace")]
     pub async fn commit(self) -> Result<(), DbErr> {
@@ -199,7 +185,6 @@ impl DatabaseTransaction {
     /// it rolled back first; it then refuses further use. A commit the
     /// transaction cannot make rolls it back instead, and fails. A failed end
     /// leaves it open, so dropping it rolls it back.
-    #[allow(unused_variables)]
     async fn end(&self, commit: bool) -> Result<(), DbErr> {
         let connection = &mut *self.conn.lock().await;
         self.ensure_open()?;
@@ -245,11 +230,7 @@ impl DatabaseTransaction {
         };
         self.state.store(ENDING, Ordering::Release);
         let ended = on_connection!(connection, connection => {
-            if commit && refusal.is_none() {
-                backend::commit(connection).await
-            } else {
-                backend::rollback(connection).await
-            }
+            backend::end(connection, commit && refusal.is_none()).await
         });
         if ended.is_ok() {
             self.conn.ended(self.depth, self.serial);
@@ -312,7 +293,6 @@ impl DatabaseTransaction {
 
     /// Abort the transaction when the failure of a statement abandoned all of
     /// it: what runs after would run outside it.
-    #[allow(unused_variables)]
     fn note_failure<T>(
         &self,
         connection: &InnerConnection,

@@ -147,7 +147,7 @@ impl Iterable for Mood {
 impl ActiveEnum for Mood {
     type Value = String;
     type ValueVec = Vec<String>;
-    fn name() -> sql_builder::DynIden {
+    fn name() -> DynIden {
         "column_mood".into_iden()
     }
     fn to_value(&self) -> Self::Value {
@@ -179,7 +179,7 @@ impl Iterable for NativeMood {
 impl ActiveEnum for NativeMood {
     type Value = sql_builder::Enum;
     type ValueVec = Vec<sql_builder::Enum>;
-    fn name() -> sql_builder::DynIden {
+    fn name() -> DynIden {
         Mood::name()
     }
     fn to_value(&self) -> Self::Value {
@@ -292,7 +292,7 @@ mod live {
             .column(Col::Id)
             .from(Entity.table_ref())
             .and_where(condition)
-            .order_by(Col::Id, sql_builder::Order::Asc)
+            .order_by(Col::Id, Order::Asc)
             .to_owned();
         db.query_all(&query)
             .await

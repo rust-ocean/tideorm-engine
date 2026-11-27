@@ -1,5 +1,5 @@
 use driver::{
-    MySql, MySqlPool,
+    MySql,
     mysql::{MySqlConnectOptions, MySqlQueryResult, MySqlRow, MySqlServer},
     pool::PoolConnection,
 };
@@ -34,11 +34,6 @@ impl MySqlConnector {
         }
         let pool = open_pool(&options, connect).await?;
         Ok(MySql::into_connection(pool))
-    }
-
-    /// Wrap a driver pool in a [DatabaseConnection]
-    pub fn from_mysql_pool(pool: MySqlPool) -> DatabaseConnection {
-        pool.into()
     }
 }
 

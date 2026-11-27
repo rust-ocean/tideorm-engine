@@ -80,7 +80,7 @@ fn debug_never_shows_the_password() {
     #[cfg(feature = "postgres")]
     {
         let typed = ConnectOptions::new(
-            tideorm::internal::driver::postgres::PgConnectOptions::new().password("fixture-secret"),
+            driver::postgres::PgConnectOptions::new().password("fixture-secret"),
         );
         let debug = format!("{typed:?}");
         assert!(debug.contains("target: Postgres(..)"), "{debug}");
@@ -115,7 +115,7 @@ fn unusable_urls_are_refused() {
 }
 
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
-fn pool_options<DB: tideorm::internal::driver::Database>() {
+fn pool_options<DB: driver::Database>() {
     let mut options = ConnectOptions::new("fixture://not-opened");
     options
         .max_connections(8)
@@ -163,7 +163,7 @@ fn pool_options<DB: tideorm::internal::driver::Database>() {
 /// Opens each target as a lazy pool, which dials nothing, and checks the
 /// backend the URL's scheme or the driver options chose.
 #[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
-fn opens_lazily<const N: usize>(targets: [ConnectTarget; N], backend: tideorm::orm::DbBackend) {
+fn opens_lazily<const N: usize>(targets: [ConnectTarget; N], backend: orm::DbBackend) {
     let opened = async {
         for target in targets {
             let mut options = ConnectOptions::new(target.clone());
@@ -185,17 +185,17 @@ fn opens_lazily<const N: usize>(targets: [ConnectTarget; N], backend: tideorm::o
 #[cfg(feature = "postgres")]
 #[test]
 fn postgres_options_and_schemes() {
-    pool_options::<tideorm::internal::driver::Postgres>();
+    pool_options::<driver::Postgres>();
     opens_lazily(
         [
             "postgres://localhost/fixture".into(),
             "PostgreSQL://localhost/fixture".into(),
-            tideorm::internal::driver::postgres::PgConnectOptions::new()
+            driver::postgres::PgConnectOptions::new()
                 .host("localhost")
                 .application_name("fixture")
                 .into(),
         ],
-        tideorm::orm::DbBackend::Postgres,
+        orm::DbBackend::Postgres,
     );
 }
 
@@ -204,31 +204,31 @@ fn postgres_options_and_schemes() {
 #[cfg(feature = "mysql")]
 #[test]
 fn mysql_options_and_schemes() {
-    pool_options::<tideorm::internal::driver::MySql>();
+    pool_options::<driver::MySql>();
     opens_lazily(
         [
             "mysql://localhost/fixture".into(),
             "MariaDB://localhost/fixture".into(),
-            tideorm::internal::driver::mysql::MySqlConnectOptions::new()
+            driver::mysql::MySqlConnectOptions::new()
                 .host("localhost")
                 .into(),
         ],
-        tideorm::orm::DbBackend::MySQL,
+        orm::DbBackend::MySQL,
     );
 }
 
 #[cfg(feature = "sqlite")]
 #[test]
 fn sqlite_options_and_schemes() {
-    pool_options::<tideorm::internal::driver::Sqlite>();
+    pool_options::<driver::Sqlite>();
     opens_lazily(
         [
             "sqlite::memory:".into(),
             "SQLite::memory:".into(),
-            tideorm::internal::driver::sqlite::SqliteConnectOptions::new()
+            driver::sqlite::SqliteConnectOptions::new()
                 .in_memory(true)
                 .into(),
         ],
-        tideorm::orm::DbBackend::SQLite,
+        orm::DbBackend::SQLite,
     );
 }

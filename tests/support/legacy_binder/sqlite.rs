@@ -32,8 +32,7 @@ impl driver::IntoArguments<driver::sqlite::Sqlite> for LegacyValues {
                     let _ = args.add(i);
                 }
                 Value::BigUnsigned(i) => {
-                    let _ = args
-                        .add(i.map(|i| <i64 as std::convert::TryFrom<u64>>::try_from(i).unwrap()));
+                    let _ = args.add(i.map(|i| <i64 as TryFrom<u64>>::try_from(i).unwrap()));
                 }
                 Value::Float(f) => {
                     let _ = args.add(f);

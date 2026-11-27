@@ -54,10 +54,6 @@ impl From<DatabaseConnectionType> for DatabaseConnection {
 }
 
 impl Debug for DatabaseConnectionType {
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(unreachable_code)
-    )]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str(match self {
             #[cfg(feature = "mysql")]
@@ -137,7 +133,6 @@ impl TransactionTrait for DatabaseConnection {
     }
 
     #[instrument(level = "trace")]
-    #[allow(unused_variables)]
     async fn begin_with_options(
         &self,
         options: TransactionOptions,

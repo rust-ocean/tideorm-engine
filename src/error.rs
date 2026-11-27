@@ -153,11 +153,8 @@ impl PartialEq for DbErr {
 
 impl Eq for DbErr {}
 
-pub(crate) fn conn_err<T>(s: T) -> DbErr
-where
-    T: ToString,
-{
-    DbErr::Conn(RuntimeErr::Internal(s.to_string()))
+pub(crate) fn conn_err(s: impl Into<String>) -> DbErr {
+    DbErr::Conn(RuntimeErr::Internal(s.into()))
 }
 
 pub(crate) fn query_err<T>(s: T) -> DbErr
@@ -167,11 +164,8 @@ where
     DbErr::Query(RuntimeErr::Internal(s.to_string()))
 }
 
-pub(crate) fn type_err<T>(s: T) -> DbErr
-where
-    T: ToString,
-{
-    DbErr::Type(s.to_string())
+pub(crate) fn type_err(s: impl Into<String>) -> DbErr {
+    DbErr::Type(s.into())
 }
 
 pub(crate) fn json_err<T>(s: T) -> DbErr

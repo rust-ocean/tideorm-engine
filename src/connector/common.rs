@@ -116,7 +116,7 @@ impl ConnectOptions {
             .test_before_acquire(self.test_before_acquire)
             .test_before_acquire_if_idle_for(
                 self.test_before_acquire_if_idle_for
-                    .or(self.test_before_acquire.then_some(IDLE_PING_THRESHOLD)),
+                    .or_else(|| self.test_before_acquire.then_some(IDLE_PING_THRESHOLD)),
             );
         opt
     }

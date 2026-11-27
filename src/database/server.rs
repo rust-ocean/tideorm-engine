@@ -40,10 +40,6 @@ impl DbServer {
 
     /// The server's `db.system.name` in OpenTelemetry's semantic
     /// conventions, or its own lowercase name where they list none.
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(dead_code)
-    )]
     pub(crate) fn system_name(self) -> &'static str {
         match self {
             Self::Postgres => "postgresql",

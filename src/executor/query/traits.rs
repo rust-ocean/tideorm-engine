@@ -124,7 +124,7 @@ where
     for<'de> Self: serde::Deserialize<'de>,
 {
     /// Get a JSON from the query result with prefixed column name
-    #[allow(unused_variables, unreachable_code)]
+    #[allow(unused_variables)]
     fn try_get_from_json<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Self, TryGetError> {
         on_row!(&res.row, idx, |row, index| {
             column::<_, driver::types::Json<Self>, _>(row, index, idx).map(|json| json.0)

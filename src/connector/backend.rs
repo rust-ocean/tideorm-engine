@@ -163,16 +163,39 @@ pub(crate) async fn query_all<DB: Driver>(
     .await
 }
 
-/// Commits the innermost transaction or savepoint on `connection`.
-pub(crate) async fn commit<DB: Driver>(connection: &mut PoolConnection<DB>) -> Result<(), DbErr> {
-    DB::TransactionManager::commit(connection)
-        .await
-        .map_err(driver_error_to_query_err)
+/// Begins a transaction on `connection`, or a savepoint inside the one open.
+pub(crate) async fn begin<DB: Driver>(
+    connection: &mut PoolConnection<DB>,
+    options: TransactionOptions,
+) -> Result<(), DbErr> {
+    let operation = match transaction_depth(connection) {
+        0 => "BEGIN",
+        _ => "SAVEPOINT",
+    };
+    let span = metric::control_span(DB::server(connection), operation);
+    metric::traced(span, <DB as Driver>::begin(connection, options)).await
 }
 
-/// Rolls back the innermost transaction or savepoint on `connection`.
-pub(crate) async fn rollback<DB: Driver>(connection: &mut PoolConnection<DB>) -> Result<(), DbErr> {
-    DB::TransactionManager::rollback(connection)
+/// Commits the innermost transaction or savepoint on `connection`, or rolls it back.
+pub(crate) async fn end<DB: Driver>(
+    connection: &mut PoolConnection<DB>,
+    commit: bool,
+) -> Result<(), DbErr> {
+    let operation = match (commit, transaction_depth(connection) > 1) {
+        (true, false) => "COMMIT",
+        (true, true) => "RELEASE SAVEPOINT",
+        (false, false) => "ROLLBACK",
+        (false, true) => "ROLLBACK TO SAVEPOINT",
+    };
+    let span = metric::control_span(DB::server(connection), operation);
+    let work = async {
+        if commit {
+            DB::TransactionManager::commit(connection).await
+        } else {
+            DB::TransactionManager::rollback(connection).await
+        }
+    };
+    metric::traced(span, work)
         .await
         .map_err(driver_error_to_query_err)
 }

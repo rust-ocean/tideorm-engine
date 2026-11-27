@@ -62,7 +62,7 @@ impl Proxy {
                         });
                         let control = control.clone();
                         std::thread::spawn(move || {
-                            forward_replies(client, server, postgres, control)
+                            forward_replies(client, server, postgres, &control)
                         });
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -88,12 +88,7 @@ impl Drop for Proxy {
     }
 }
 
-fn forward_replies(
-    mut client: TcpStream,
-    mut server: TcpStream,
-    postgres: bool,
-    gate: Arc<ReplyGate>,
-) {
+fn forward_replies(mut client: TcpStream, mut server: TcpStream, postgres: bool, gate: &ReplyGate) {
     // The proxy ends with an error once either side hangs up.
     let _ = (|| -> std::io::Result<()> {
         loop {
@@ -157,9 +152,9 @@ async fn cancelled_begin(url: &str, disconnect: bool) {
         options = ConnectOptions::new(
             proxied
                 .as_str()
-                .parse::<tideorm_engine::driver::postgres::PgConnectOptions>()
+                .parse::<driver::postgres::PgConnectOptions>()
                 .unwrap()
-                .ssl_mode(tideorm_engine::driver::postgres::PgSslMode::Disable),
+                .ssl_mode(driver::postgres::PgSslMode::Disable),
         );
     }
     #[cfg(feature = "mysql")]
@@ -167,9 +162,9 @@ async fn cancelled_begin(url: &str, disconnect: bool) {
         options = ConnectOptions::new(
             proxied
                 .as_str()
-                .parse::<tideorm_engine::driver::mysql::MySqlConnectOptions>()
+                .parse::<driver::mysql::MySqlConnectOptions>()
                 .unwrap()
-                .ssl_mode(tideorm_engine::driver::mysql::MySqlSslMode::Disabled),
+                .ssl_mode(driver::mysql::MySqlSslMode::Disabled),
         );
     }
     options

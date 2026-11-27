@@ -187,7 +187,7 @@ pub trait ActiveModelTrait: Clone + Debug {
         // Restore primary key values
         for (col, active_value) in primary_key_values {
             match active_value {
-                ActiveValue::Unchanged(v) | ActiveValue::Set(v) => self.set(col, v),
+                Unchanged(v) | Set(v) => self.set(col, v),
                 NotSet => self.not_set(col),
             }
         }
@@ -223,7 +223,7 @@ pub trait ActiveModelTrait: Clone + Debug {
             let has_key = input.contains_key(key);
             json_keys.push((col, has_key));
             match dummy_am.get(col) {
-                ActiveValue::Unchanged(value) | ActiveValue::Set(value) => {
+                Unchanged(value) | Set(value) => {
                     merged.insert(
                         key.to_owned(),
                         sql_builder::value_to_json_value(&value)
@@ -246,7 +246,7 @@ pub trait ActiveModelTrait: Clone + Debug {
         // Transform attribute that exists in JSON object into ActiveValue::Set, otherwise ActiveValue::NotSet
         for (col, json_key_exists) in json_keys {
             match (json_key_exists, am.get(col)) {
-                (true, ActiveValue::Set(value) | ActiveValue::Unchanged(value)) => {
+                (true, Set(value) | Unchanged(value)) => {
                     am.set(col, value);
                 }
                 _ => {
@@ -260,7 +260,6 @@ pub trait ActiveModelTrait: Clone + Debug {
 
     /// Return `true` if any attribute of `ActiveModel` is `Set`
     fn is_changed(&self) -> bool {
-        <Self::Entity as EntityTrait>::Column::iter()
-            .any(|col| matches!(self.get(col), ActiveValue::Set(_)))
+        <Self::Entity as EntityTrait>::Column::iter().any(|col| matches!(self.get(col), Set(_)))
     }
 }

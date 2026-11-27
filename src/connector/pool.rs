@@ -68,7 +68,10 @@ impl<DB: Driver> DriverPoolConnection<DB> {
     }
 
     pub(super) async fn acquire(&self) -> Result<PoolConnection<DB>, DbErr> {
-        let connection = self.pool.acquire().await.map_err(driver_conn_acquire_err)?;
+        let span = crate::metric::acquire_span(self.server());
+        let connection = crate::metric::traced(span, self.pool.acquire())
+            .await
+            .map_err(driver_conn_acquire_err)?;
         self.server.get_or_init(|| DB::server(&connection));
         Ok(connection)
     }

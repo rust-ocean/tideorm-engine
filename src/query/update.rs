@@ -113,65 +113,8 @@ impl Update {
     }
 }
 
-impl<A> QueryFilter for ValidatedUpdateOne<A>
-where
-    A: ActiveModelTrait,
-{
-    type QueryStatement = UpdateStatement;
-
-    fn query(&mut self) -> &mut UpdateStatement {
-        &mut self.query
-    }
-}
-
-impl<E> QueryFilter for UpdateMany<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = UpdateStatement;
-
-    fn query(&mut self) -> &mut UpdateStatement {
-        &mut self.query
-    }
-}
-
-impl<A> QueryTrait for ValidatedUpdateOne<A>
-where
-    A: ActiveModelTrait,
-{
-    type QueryStatement = UpdateStatement;
-
-    fn query(&mut self) -> &mut UpdateStatement {
-        &mut self.query
-    }
-
-    fn as_query(&self) -> &UpdateStatement {
-        &self.query
-    }
-
-    fn into_query(self) -> UpdateStatement {
-        self.query
-    }
-}
-
-impl<E> QueryTrait for UpdateMany<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = UpdateStatement;
-
-    fn query(&mut self) -> &mut UpdateStatement {
-        &mut self.query
-    }
-
-    fn as_query(&self) -> &UpdateStatement {
-        &self.query
-    }
-
-    fn into_query(self) -> UpdateStatement {
-        self.query
-    }
-}
+builds_statement!(UpdateStatement, ValidatedUpdateOne<A: ActiveModelTrait>, filtered);
+builds_statement!(UpdateStatement, UpdateMany<E: EntityTrait>, filtered);
 
 impl<E> UpdateMany<E>
 where

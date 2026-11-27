@@ -1,21 +1,28 @@
 #![cfg(all(feature = "sqlite", feature = "runtime-tokio"))]
-//! Every statement runs in a `db.query` span carrying OpenTelemetry's
-//! database client fields.
+//! Every statement, transaction control included, runs in a `db.query` span
+//! carrying OpenTelemetry's database client fields, and every wait for a
+//! pooled connection in a `db.pool.acquire` span.
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
-use tideorm::orm::{ConnectOptions, Database, DatabaseConnectionType, DbBackend, Statement};
+use tideorm::orm::{
+    ConnectOptions, Database, DatabaseConnectionType, DbBackend, Statement, TransactionTrait,
+};
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id, Record};
 use tracing::{Event, Metadata, Subscriber};
 
 type Fields = BTreeMap<String, String>;
 
-/// Records every span's target and fields, and what is recorded into it later.
+/// A span's target, name and fields.
+type Recorded = (String, &'static str, Fields);
+
+/// Records every span's target, name and fields, and what is recorded into
+/// it later.
 #[derive(Clone, Default)]
-struct Spans(Arc<Mutex<Vec<(String, Fields)>>>);
+struct Spans(Arc<Mutex<Vec<Recorded>>>);
 
 #[derive(Default)]
 struct Visited(Fields);
@@ -39,7 +46,8 @@ impl Subscriber for Spans {
         let mut visited = Visited::default();
         span.record(&mut visited);
         let mut spans = self.0.lock().unwrap();
-        spans.push((span.metadata().target().to_owned(), visited.0));
+        let metadata = span.metadata();
+        spans.push((metadata.target().to_owned(), metadata.name(), visited.0));
         Id::from_u64(spans.len() as u64)
     }
 
@@ -47,7 +55,7 @@ impl Subscriber for Spans {
         let mut visited = Visited::default();
         values.record(&mut visited);
         self.0.lock().unwrap()[span.into_u64() as usize - 1]
-            .1
+            .2
             .extend(visited.0);
     }
 
@@ -64,7 +72,7 @@ async fn run_statements() {
     let DatabaseConnectionType::SqlitePoolConnection(pool) = &db.inner else {
         panic!("SQLite required");
     };
-    let statement = |sql: &str, values: Vec<tideorm::orm::sql_builder::Value>| {
+    let statement = |sql: &str, values: Vec<sql_builder::Value>| {
         Statement::from_sql_and_values(DbBackend::SQLite, sql, values)
     };
     pool.execute_unprepared("CREATE TABLE traced (id INTEGER PRIMARY KEY)")
@@ -84,6 +92,13 @@ async fn run_statements() {
         .await
         .unwrap();
     assert_eq!(rows.len(), 2);
+
+    let transaction = db.begin().await.unwrap();
+    let savepoint = transaction.begin().await.unwrap();
+    savepoint.commit().await.unwrap();
+    let savepoint = transaction.begin().await.unwrap();
+    savepoint.rollback().await.unwrap();
+    transaction.commit().await.unwrap();
 }
 
 #[test]
@@ -95,18 +110,45 @@ fn statements_run_in_spans_with_the_database_fields() {
         .unwrap();
     tracing::subscriber::with_default(spans.clone(), || runtime.block_on(run_statements()));
 
-    let queries: Vec<Fields> = spans
-        .0
-        .lock()
-        .unwrap()
-        .iter()
-        .filter(|(target, _)| target == "tideorm::query")
-        .map(|(_, fields)| fields.clone())
-        .collect();
+    let named = |wanted: &str| -> Vec<Fields> {
+        spans
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(target, name, _)| target == "tideorm::query" && *name == wanted)
+            .map(|(_, _, fields)| fields.clone())
+            .collect()
+    };
+    let queries = named("db.query");
     let field = |span: &Fields, name: &str| span.get(name).cloned();
+    let operations: Vec<String> = queries
+        .iter()
+        .filter_map(|span| field(span, "db.operation.name"))
+        .collect();
+    assert_eq!(
+        operations,
+        [
+            "BEGIN",
+            "SAVEPOINT",
+            "RELEASE SAVEPOINT",
+            "SAVEPOINT",
+            "ROLLBACK TO SAVEPOINT",
+            "COMMIT"
+        ]
+    );
+    let acquires = named("db.pool.acquire");
+    assert!(!acquires.is_empty());
+    assert!(
+        acquires
+            .iter()
+            .all(|span| field(span, "otel.status_code").is_none())
+    );
     let unprepared = queries
         .iter()
-        .find(|span| field(span, "db.query.text").is_none())
+        .find(|span| {
+            field(span, "db.query.text").is_none() && field(span, "db.operation.name").is_none()
+        })
         .expect("the unprepared statement's span");
     assert_eq!(
         field(unprepared, "db.system.name").as_deref(),

@@ -17,7 +17,7 @@ fn panic_message(f: impl FnOnce() -> u64 + std::panic::UnwindSafe) -> String {
 #[test]
 #[cfg(feature = "postgres")]
 fn postgres_result_conversion_and_unsupported_id() {
-    let result: ExecResult = tideorm::orm::driver::postgres::PgQueryResult::default().into();
+    let result: ExecResult = driver::postgres::PgQueryResult::default().into();
     assert_eq!(result.rows_affected(), 0);
     assert_eq!(
         format!("{result:?}"),
@@ -33,7 +33,7 @@ fn postgres_result_conversion_and_unsupported_id() {
 #[test]
 #[cfg(feature = "mysql")]
 fn mysql_result_conversion_and_zero_id() {
-    let result: ExecResult = tideorm::orm::driver::mysql::MySqlQueryResult::default().into();
+    let result: ExecResult = driver::mysql::MySqlQueryResult::default().into();
     assert_eq!((result.rows_affected(), result.last_insert_id()), (0, 0));
     assert_eq!(result.try_last_insert_id(), Ok(0));
     assert_eq!(
@@ -45,7 +45,7 @@ fn mysql_result_conversion_and_zero_id() {
 #[test]
 #[cfg(feature = "sqlite")]
 fn sqlite_result_conversion_and_zero_id() {
-    let result: ExecResult = tideorm::orm::driver::sqlite::SqliteQueryResult::default().into();
+    let result: ExecResult = driver::sqlite::SqliteQueryResult::default().into();
     assert_eq!((result.rows_affected(), result.last_insert_id()), (0, 0));
     assert_eq!(result.try_last_insert_id(), Ok(0));
     assert_eq!(

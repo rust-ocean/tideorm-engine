@@ -44,10 +44,6 @@ pub(crate) struct SharedConnection {
 }
 
 impl SharedConnection {
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(dead_code)
-    )]
     pub(crate) fn new(connection: InnerConnection, identity: u64) -> Self {
         let (server, exact_levels) = match &connection {
             #[cfg(feature = "mysql")]
@@ -61,7 +57,6 @@ impl SharedConnection {
             ),
             #[cfg(feature = "sqlite")]
             InnerConnection::Sqlite(_) => (Some(DbServer::Sqlite), true),
-            #[allow(unreachable_patterns)]
             _ => (None, false),
         };
         Self {
@@ -96,10 +91,6 @@ impl SharedConnection {
     /// none at the top) opened, and return the new level's depth and serial.
     /// Fails when `parent` ended meanwhile, dropped on another thread: the
     /// new level is then rolled back with it.
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(dead_code)
-    )]
     pub(crate) fn opened(&self, parent: Option<(usize, u64)>) -> Result<(usize, u64), DbErr> {
         let mut levels = self.levels();
         let depth = match parent {
@@ -178,10 +169,6 @@ impl SharedConnection {
 
     /// Close the connection once whatever holds it lets go. The rollbacks
     /// still queued need not run: closing it ends every transaction on it.
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(dead_code)
-    )]
     pub(crate) async fn close(&self) -> Result<(), DbErr> {
         let mut connection = self.connection.lock().await;
         {
@@ -220,7 +207,6 @@ impl SharedConnection {
     /// and none by the driver's count or the server's. A transaction still
     /// open stays refused even when the driver reports none: the rollback
     /// queued for the savepoint may have ended it instead.
-    #[allow(unused_variables)]
     pub(crate) async fn ensure_settled(
         &self,
         connection: &mut InnerConnection,
@@ -252,10 +238,6 @@ impl SharedConnection {
     }
 
     /// Forget the abort of a transaction that ended, as the next one begins.
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(dead_code)
-    )]
     pub(crate) fn clear_abort(&self) {
         *self.aborted() = None;
     }
@@ -295,7 +277,6 @@ impl SharedConnection {
 
     /// Queue the rollbacks left by the transactions dropped while the
     /// connection was held, which the driver sends before its next statement.
-    #[allow(unused_variables)]
     fn settle(&self, connection: &mut InnerConnection) {
         let abandoned = std::mem::take(&mut self.levels().abandoned);
         if abandoned == 0 {

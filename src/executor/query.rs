@@ -25,7 +25,6 @@ pub struct QueryResult {
     pub(crate) row: QueryResultRow,
 }
 
-#[allow(clippy::enum_variant_names)]
 pub(crate) enum QueryResultRow {
     #[cfg(feature = "mysql")]
     MySql(driver::mysql::MySqlRow),
@@ -254,12 +253,11 @@ impl Debug for QueryResultRow {
 
 // TryGetable //
 
+/// `None` for SQL `NULL`. A column the row does not have is an error, as it is
+/// for `T`, so a misspelt alias is not read as `NULL`.
 impl<T: TryGetable> TryGetable for Option<T> {
     fn try_get_by<I: ColIdx>(res: &QueryResult, index: I) -> Result<Self, TryGetError> {
-        match T::try_get_opt_by(res, index) {
-            Err(TryGetError::DbErr(err)) if is_column_not_found(&err) => Ok(None),
-            read => read,
-        }
+        T::try_get_opt_by(res, index)
     }
 }
 

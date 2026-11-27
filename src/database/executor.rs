@@ -135,13 +135,3 @@ impl IntoDatabaseExecutor<'static> for DatabaseTransaction {
         DatabaseExecutor::OwnedTransaction(self)
     }
 }
-
-impl DatabaseExecutor<'_> {
-    /// Returns `true` if this executor is backed by a transaction (borrowed or owned).
-    pub fn is_transaction(&self) -> bool {
-        matches!(
-            self,
-            DatabaseExecutor::Transaction(_) | DatabaseExecutor::OwnedTransaction(_)
-        )
-    }
-}

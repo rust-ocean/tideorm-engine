@@ -1,6 +1,5 @@
 use crate::IdenStatic;
-use sql_builder::{Alias, DynIden, Iden, IntoIden};
-use std::{borrow::Cow, fmt::Write};
+use sql_builder::{Alias, DynIden, IntoIden};
 
 /// A one-or-many column identifier — the abstraction the engine uses to refer
 /// to either a single column or a composite (e.g. a composite primary key
@@ -43,16 +42,6 @@ impl Identity {
     pub fn contains(&self, col: &DynIden) -> bool {
         self.iter().any(|c| c == col)
     }
-
-    /// `true` if every column of `other` also appears in `self`.
-    pub fn fully_contains(&self, other: &Identity) -> bool {
-        for col in other.iter() {
-            if !self.contains(col) {
-                return false;
-            }
-        }
-        true
-    }
 }
 
 impl IntoIterator for Identity {
@@ -64,34 +53,6 @@ impl IntoIterator for Identity {
             identity: self,
             index: 0,
         }
-    }
-}
-
-impl Iden for Identity {
-    fn quoted(&self) -> Cow<'static, str> {
-        match self {
-            Identity::Unary(iden) => iden.inner(),
-            Identity::Binary(iden1, iden2) => Cow::Owned(format!("{iden1}{iden2}")),
-            Identity::Ternary(iden1, iden2, iden3) => Cow::Owned(format!("{iden1}{iden2}{iden3}")),
-            Identity::Many(vec) => {
-                let mut s = String::new();
-                for iden in vec.iter() {
-                    write!(&mut s, "{iden}").expect("Infallible");
-                }
-                Cow::Owned(s)
-            }
-        }
-    }
-
-    fn to_string(&self) -> String {
-        match self.quoted() {
-            Cow::Borrowed(s) => s.to_owned(),
-            Cow::Owned(s) => s,
-        }
-    }
-
-    fn unquoted(&self) -> &str {
-        panic!("Should not call this")
     }
 }
 

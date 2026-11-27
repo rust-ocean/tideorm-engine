@@ -1,5 +1,5 @@
 use driver::{
-    PgPool, Postgres,
+    Postgres,
     pool::PoolConnection,
     postgres::{PgConnectOptions, PgQueryResult, PgRow, PgServer},
 };
@@ -33,11 +33,6 @@ impl PostgresConnector {
         }
         let pool = open_pool(&options, connect).await?;
         Ok(Postgres::into_connection(pool))
-    }
-
-    /// Wrap a driver pool in a [DatabaseConnection]
-    pub fn from_postgres_pool(pool: PgPool) -> DatabaseConnection {
-        pool.into()
     }
 }
 

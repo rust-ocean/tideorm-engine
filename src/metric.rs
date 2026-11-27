@@ -29,10 +29,6 @@ pub struct Info<'a> {
 /// when there is an observer, reports to its callback how long the statement
 /// took (on the monotonic clock), and its error or the rows `rows` counts in
 /// its result.
-#[cfg_attr(
-    not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-    allow(dead_code)
-)]
 pub(crate) async fn observed<T>(
     span: Span,
     observer: Option<(&Callback, &crate::Statement)>,
@@ -62,10 +58,6 @@ pub(crate) async fn observed<T>(
 /// `db.system.name`, the statement's `db.query.text` (with markers for its
 /// bound values; `None` for unprepared SQL, whose text holds them), then
 /// `db.response.returned_rows` or an `ERROR` `otel.status_code`.
-#[cfg_attr(
-    not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-    allow(dead_code)
-)]
 pub(crate) fn span(server: crate::DbServer, sql: Option<&str>) -> Span {
     tracing::debug_span!(
         target: "tideorm::query",
@@ -76,4 +68,41 @@ pub(crate) fn span(server: crate::DbServer, sql: Option<&str>) -> Span {
         db.response.returned_rows = tracing::field::Empty,
         otel.status_code = tracing::field::Empty,
     )
+}
+
+/// The span of a transaction's control statement, a statement's span with
+/// the command (`BEGIN`, `COMMIT`, `SAVEPOINT`, ..) in `db.operation.name`
+/// instead of its text.
+pub(crate) fn control_span(server: crate::DbServer, operation: &'static str) -> Span {
+    tracing::debug_span!(
+        target: "tideorm::query",
+        "db.query",
+        otel.kind = "client",
+        db.system.name = server.system_name(),
+        db.operation.name = operation,
+        otel.status_code = tracing::field::Empty,
+    )
+}
+
+/// The span of the wait for a pooled connection, `db.pool.acquire`, with the
+/// server's `db.system.name` once a connection has said which it is.
+pub(crate) fn acquire_span(server: Option<crate::DbServer>) -> Span {
+    tracing::debug_span!(
+        target: "tideorm::query",
+        "db.pool.acquire",
+        db.system.name = server.map(crate::DbServer::system_name),
+        otel.status_code = tracing::field::Empty,
+    )
+}
+
+/// Runs `work` inside `span`, marking the span when it fails.
+pub(crate) async fn traced<T, E>(
+    span: Span,
+    work: impl Future<Output = Result<T, E>>,
+) -> Result<T, E> {
+    let result = work.instrument(span.clone()).await;
+    if result.is_err() {
+        span.record("otel.status_code", "ERROR");
+    }
+    result
 }

@@ -260,7 +260,7 @@ mod postgres_array {
         chrono::DateTime<chrono::FixedOffset>,
         chrono::DateTime<chrono::Utc>,
         chrono::DateTime<chrono::Local>,
-        rust_decimal::Decimal,
+        Decimal,
     );
 
     macro_rules! try_getable_postgres_array_uuid {

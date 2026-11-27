@@ -15,10 +15,6 @@ pub enum InnerConnection {
     #[cfg(feature = "sqlite")]
     Sqlite(PoolConnection<driver::Sqlite>),
     /// A session's connection once it was closed; nothing runs on it.
-    #[cfg_attr(
-        not(any(feature = "postgres", feature = "mysql", feature = "sqlite")),
-        allow(dead_code)
-    )]
     Closed,
 }
 
@@ -35,7 +31,6 @@ macro_rules! on_connection {
             $crate::connector::InnerConnection::Postgres($connection) => $body,
             #[cfg(feature = "sqlite")]
             $crate::connector::InnerConnection::Sqlite($connection) => $body,
-            #[allow(unreachable_patterns)]
             _ => Err($crate::error::conn_err("Disconnected")),
         }
     };

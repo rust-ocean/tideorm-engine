@@ -124,7 +124,9 @@ mod live {
             row.try_get_by_index_nullable::<Option<i64>>(2).unwrap(),
             None
         );
-        assert_eq!(row.try_get::<Option<i64>>("p_missing").unwrap(), None);
+        assert!(
+            matches!(row.try_get::<Option<i64>>("p_missing"), Err(DbErr::Query(RuntimeErr::DriverError(error))) if matches!(&*error,driver::Error::ColumnNotFound(_)))
+        );
         assert!(
             matches!(row.try_get_by_nullable::<i64,_>("p_absent"), Err(TryGetError::Null(name)) if name == "\"p_absent\"")
         );
@@ -414,7 +416,7 @@ mod live {
         let query = sql_builder::Query::select()
             .columns(["id", "label"])
             .from("query_contract_rows")
-            .order_by("id", sql_builder::Order::Asc)
+            .order_by("id", Order::Asc)
             .to_owned();
         assert_eq!(conn.query_all(&query).await.unwrap().len(), 2);
         assert_eq!(

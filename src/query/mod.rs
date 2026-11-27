@@ -13,6 +13,39 @@
 //! For raw SQL, build a [`Statement`] with
 //! [`Statement::from_sql_and_values`].
 
+/// [`QueryTrait`] for a builder holding its statement in `query`, and with `filtered`
+/// [`QueryFilter`] too.
+macro_rules! builds_statement {
+    ($statement:ident, $builder:ident<$param:ident: $bound:ident>) => {
+        impl<$param: $bound> QueryTrait for $builder<$param> {
+            type QueryStatement = $statement;
+
+            fn query(&mut self) -> &mut $statement {
+                &mut self.query
+            }
+
+            fn as_query(&self) -> &$statement {
+                &self.query
+            }
+
+            fn into_query(self) -> $statement {
+                self.query
+            }
+        }
+    };
+    ($statement:ident, $builder:ident<$param:ident: $bound:ident>, filtered) => {
+        builds_statement!($statement, $builder<$param: $bound>);
+
+        impl<$param: $bound> QueryFilter for $builder<$param> {
+            type QueryStatement = $statement;
+
+            fn query(&mut self) -> &mut $statement {
+                &mut self.query
+            }
+        }
+    };
+}
+
 mod debug;
 mod delete;
 mod helper;

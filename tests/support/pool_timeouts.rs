@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 use tideorm_engine::{ConnectOptions, Database};
 
-pub(super) fn run(future: impl std::future::Future<Output = ()>) {
+pub(super) fn run(future: impl Future<Output = ()>) {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -75,7 +75,7 @@ fn saturated_sqlite_checkout_uses_acquire_timeout() {
         let held = pool.acquire().await.unwrap();
         let start = Instant::now();
         let error = pool.acquire().await.unwrap_err();
-        assert!(matches!(error, tideorm_engine::driver::Error::PoolTimedOut));
+        assert!(matches!(error, driver::Error::PoolTimedOut));
         assert!(start.elapsed() >= Duration::from_millis(80));
         assert!(start.elapsed() < Duration::from_secs(1));
         held.close().await.unwrap();

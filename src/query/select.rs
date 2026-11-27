@@ -1,6 +1,6 @@
 use crate::{
-    ColumnTrait, EntityTrait, IdenStatic, Iterable, Order, PrimaryKeyToColumn, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait,
+    ColumnTrait, EntityTrait, Iterable, Order, PrimaryKeyToColumn, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait,
 };
 use core::fmt::Debug;
 use core::marker::PhantomData;
@@ -146,16 +146,6 @@ where
     }
 
     /// Apply order by primary key to the query statement
-    pub fn order_by_id_asc(self) -> Self {
-        self.order_by_id(Order::Asc)
-    }
-
-    /// Apply order by primary key to the query statement
-    pub fn order_by_id_desc(self) -> Self {
-        self.order_by_id(Order::Desc)
-    }
-
-    /// Apply order by primary key to the query statement
     pub fn order_by_id(mut self, order: Order) -> Self {
         for key in E::PrimaryKey::iter() {
             let col = key.into_column();
@@ -164,41 +154,6 @@ where
         }
         self
     }
-
-    /// Select all columns of this entity except the given ones.
-    ///
-    /// Clears any prior selection (`clear_selects`) and then rebuilds it, so this
-    /// overrides earlier [`QuerySelect::select_only`] / [`QuerySelect::column`] calls
-    /// and is not composable with them.
-    ///
-    /// Rows still hydrate into the full `Model`, so only `Option<_>` columns can be
-    /// excluded. Excluding a non-nullable column results in a runtime error,
-    /// `Missing value for column`. Excluding every column leaves nothing to select
-    /// and produces invalid SQL.
-    pub fn select_except(mut self, except: impl IntoIterator<Item = E::Column>) -> Self {
-        let except: Vec<&str> = except.into_iter().map(|col| col.as_str()).collect();
-        self.query.clear_selects();
-        self.query.exprs(
-            E::Column::iter()
-                .filter(|col| !except.contains(&col.as_str()))
-                .map(ColumnSelectExt::into_select_expr),
-        );
-        self
-    }
 }
 
-impl<E> QueryTrait for Select<E>
-where
-    E: EntityTrait,
-{
-    type QueryStatement = SelectStatement;
-    fn query(&mut self) -> &mut SelectStatement {
-        &mut self.query
-    }
-    fn as_query(&self) -> &SelectStatement {
-        &self.query
-    }
-    fn into_query(self) -> SelectStatement {
-        self.query
-    }
-}
+builds_statement!(SelectStatement, Select<E: EntityTrait>);

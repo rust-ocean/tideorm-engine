@@ -184,8 +184,8 @@ where
     /// Take ownership of the inner value, also setting self to `NotSet`
     pub fn take(&mut self) -> Option<V> {
         match std::mem::take(self) {
-            ActiveValue::Set(value) | ActiveValue::Unchanged(value) => Some(value),
-            ActiveValue::NotSet => None,
+            Set(value) | Unchanged(value) => Some(value),
+            NotSet => None,
         }
     }
 
@@ -196,16 +196,16 @@ where
     /// Panics if it is [ActiveValue::NotSet]
     pub fn unwrap(self) -> V {
         match self {
-            ActiveValue::Set(value) | ActiveValue::Unchanged(value) => value,
-            ActiveValue::NotSet => panic!("Cannot unwrap ActiveValue::NotSet"),
+            Set(value) | Unchanged(value) => value,
+            NotSet => panic!("Cannot unwrap ActiveValue::NotSet"),
         }
     }
 
     /// Take ownership of the inner value, consuming self
     pub fn into_value(self) -> Option<Value> {
         match self {
-            ActiveValue::Set(value) | ActiveValue::Unchanged(value) => Some(value.into()),
-            ActiveValue::NotSet => None,
+            Set(value) | Unchanged(value) => Some(value.into()),
+            NotSet => None,
         }
     }
 
@@ -222,8 +222,8 @@ where
     /// leaving [ActiveValue::NotSet] untouched.
     pub fn reset(&mut self) {
         *self = match self.take() {
-            Some(value) => ActiveValue::Set(value),
-            None => ActiveValue::NotSet,
+            Some(value) => Set(value),
+            None => NotSet,
         };
     }
 
@@ -242,8 +242,8 @@ where
         V: PartialEq,
     {
         match self {
-            ActiveValue::Unchanged(current) if &value == current => {}
-            _ => *self = ActiveValue::Set(value),
+            Unchanged(current) if &value == current => {}
+            _ => *self = Set(value),
         }
     }
 
@@ -268,9 +268,9 @@ where
         V: PartialEq,
     {
         match self {
-            ActiveValue::Unchanged(current) if &value == current => {}
-            ActiveValue::Set(_) if !f(&value) => {}
-            _ => *self = ActiveValue::Set(value),
+            Unchanged(current) if &value == current => {}
+            Set(_) if !f(&value) => {}
+            _ => *self = Set(value),
         }
     }
 
@@ -286,8 +286,8 @@ where
     /// Similar to "null coalescing" or [Option#method.get_or_insert], but without
     /// returning the inner value if it is set/unchanged.
     pub fn set_if_unset(&mut self, value: V) {
-        if let ActiveValue::NotSet = self {
-            *self = ActiveValue::Set(value);
+        if let NotSet = self {
+            *self = Set(value);
         }
     }
 
@@ -298,8 +298,8 @@ where
     /// This can be useful if the value you want to replace it with is expensive to compute,
     /// or has side-effects which need to be ran (like logging).
     pub fn set_if_unset_with(&mut self, f: impl FnOnce() -> V) {
-        if let ActiveValue::NotSet = self {
-            *self = ActiveValue::Set(f());
+        if let NotSet = self {
+            *self = Set(f());
         }
     }
 
@@ -312,8 +312,8 @@ where
     where
         V: Default,
     {
-        if let ActiveValue::NotSet = self {
-            *self = ActiveValue::Set(V::default());
+        if let NotSet = self {
+            *self = Set(V::default());
         }
     }
 
@@ -322,8 +322,8 @@ where
     /// There's also a panicking version: [ActiveValue::as_ref].
     pub fn try_as_ref(&self) -> Option<&V> {
         match self {
-            ActiveValue::Set(value) | ActiveValue::Unchanged(value) => Some(value),
-            ActiveValue::NotSet => None,
+            Set(value) | Unchanged(value) => Some(value),
+            NotSet => None,
         }
     }
 }
@@ -351,13 +351,13 @@ where
     /// For a borrowing version, see [ActiveValue::as_option].
     pub fn into_option(self) -> Option<V> {
         match self {
-            ActiveValue::Set(value) | ActiveValue::Unchanged(value) => value,
-            ActiveValue::NotSet => None,
+            Set(value) | Unchanged(value) => value,
+            NotSet => None,
         }
     }
 }
 
-impl<V> std::convert::AsRef<V> for ActiveValue<V>
+impl<V> AsRef<V> for ActiveValue<V>
 where
     V: Into<Value>,
 {
@@ -368,21 +368,20 @@ where
     /// See [ActiveValue::try_as_ref] for a fallible non-panicking version.
     fn as_ref(&self) -> &V {
         match self {
-            ActiveValue::Set(value) | ActiveValue::Unchanged(value) => value,
-            ActiveValue::NotSet => panic!("Cannot borrow ActiveValue::NotSet"),
+            Set(value) | Unchanged(value) => value,
+            NotSet => panic!("Cannot borrow ActiveValue::NotSet"),
         }
     }
 }
 
 impl<V> PartialEq for ActiveValue<V>
 where
-    V: Into<Value> + std::cmp::PartialEq,
+    V: Into<Value> + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ActiveValue::Set(l), ActiveValue::Set(r))
-            | (ActiveValue::Unchanged(l), ActiveValue::Unchanged(r)) => l == r,
-            (ActiveValue::NotSet, ActiveValue::NotSet) => true,
+            (Set(l), Set(r)) | (Unchanged(l), Unchanged(r)) => l == r,
+            (NotSet, NotSet) => true,
             _ => false,
         }
     }
@@ -394,9 +393,9 @@ where
 {
     fn from(value: ActiveValue<V>) -> Self {
         match value {
-            ActiveValue::Set(value) => ActiveValue::set(Some(value)),
-            ActiveValue::Unchanged(value) => ActiveValue::unchanged(Some(value)),
-            ActiveValue::NotSet => ActiveValue::not_set(),
+            Set(value) => ActiveValue::set(Some(value)),
+            Unchanged(value) => ActiveValue::unchanged(Some(value)),
+            NotSet => ActiveValue::not_set(),
         }
     }
 }

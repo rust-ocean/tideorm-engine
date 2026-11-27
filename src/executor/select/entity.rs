@@ -4,12 +4,6 @@ impl<E> Select<E>
 where
     E: EntityTrait,
 {
-    /// Perform a Select operation on a Model using a [Statement]
-    #[allow(clippy::wrong_self_convention)]
-    pub fn from_raw_sql(self, stmt: Statement) -> SelectorRaw<SelectModel<E::Model>> {
-        SelectorRaw::new(stmt)
-    }
-
     /// Return a [Selector] from `Self` that wraps a [SelectModel]
     pub fn into_model<M>(self) -> Selector<SelectModel<M>>
     where

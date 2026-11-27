@@ -33,7 +33,6 @@ pub(crate) mod macros {
         ($vis:vis $func:ident) => {
             /// Applies the [`Expr`] method of the same name to this column and the
             /// values of `v`; an enum column casts each to its type.
-            #[allow(clippy::wrong_self_convention)]
             $vis fn $func<V, I>(&self, v: I) -> Expr
             where
                 V: Into<Value>,
@@ -49,7 +48,6 @@ pub(crate) mod macros {
         ($vis:vis $func:ident) => {
             /// Applies the [`Expr`] method of the same name to this column and the
             /// subquery `s`.
-            #[allow(clippy::wrong_self_convention)]
             $vis fn $func(&self, s: SelectStatement) -> Expr {
                 Expr::col(self.as_column_ref()).$func(s)
             }

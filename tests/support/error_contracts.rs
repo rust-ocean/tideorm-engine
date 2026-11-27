@@ -173,7 +173,7 @@ fn auxiliary_errors_keep_public_fields_traits_and_module_aliases() {
     thread_safe::<RuntimeErr>();
     thread_safe::<ConnAcquireErr>();
     eq_clone::<DbErr>();
-    let _: tideorm::orm::error::DbErr = DbErr::RecordNotInserted;
+    let _: DbErr = DbErr::RecordNotInserted;
     let timeout = ConnAcquireErr::Timeout;
     let copied = timeout;
     assert_eq!(timeout, copied);
@@ -291,7 +291,7 @@ async fn sqlite_errors() {
         let runtime = RuntimeErr::DriverError(driver.clone());
         for error in [DbErr::Exec(runtime.clone()), DbErr::Query(runtime)] {
             let (DbErr::Exec(RuntimeErr::DriverError(retained))
-            | DbErr::Query(RuntimeErr::DriverError(retained))) = error.clone()
+            | DbErr::Query(RuntimeErr::DriverError(retained))) = error
             else {
                 panic!("wrong error")
             };

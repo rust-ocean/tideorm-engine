@@ -132,11 +132,11 @@ fn unset_helpers_are_lazy_and_do_not_replace_explicit_null() {
         let mut actual = initial.clone();
         actual.set_if_unset(Some(8));
         assert_eq!(
-            actual,
+            &actual,
             if initial.is_not_set() {
-                Set(Some(8))
+                &Set(Some(8))
             } else {
-                initial.clone()
+                &initial
             }
         );
         let mut actual = initial.clone();
@@ -147,11 +147,11 @@ fn unset_helpers_are_lazy_and_do_not_replace_explicit_null() {
         });
         assert_eq!(calls.get(), usize::from(initial.is_not_set()));
         assert_eq!(
-            actual,
+            &actual,
             if initial.is_not_set() {
-                Set(Some(9))
+                &Set(Some(9))
             } else {
-                initial.clone()
+                &initial
             }
         );
         let mut actual = initial.clone();
@@ -278,5 +278,5 @@ fn omitted_unwrap_keeps_its_panic_contract() {
 #[test]
 #[should_panic(expected = "Cannot borrow ActiveValue::NotSet")]
 fn omitted_borrow_keeps_its_panic_contract() {
-    let _ = AsRef::<i32>::as_ref(&ActiveValue::NotSet);
+    let _ = AsRef::<i32>::as_ref(&NotSet);
 }

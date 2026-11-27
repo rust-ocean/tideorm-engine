@@ -295,7 +295,7 @@ fn postgres_arrays_match_legacy_encodings() {
         for values in [
             None,
             Some(Box::new(vec![])),
-            Some(Box::new(vec![value.clone(), value.clone()])),
+            Some(Box::new(vec![value.clone(), value])),
         ] {
             parity!(
                 statement(
@@ -437,7 +437,7 @@ fn non_postgres_arrays_return_errors() {
         {
             let stmt = statement(
                 DbBackend::SQLite,
-                vec![Value::Array(ArrayType::Int, values.clone())],
+                vec![Value::Array(ArrayType::Int, values)],
             );
             assert!(
                 std::panic::catch_unwind(|| stmt

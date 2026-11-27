@@ -73,42 +73,7 @@ where
     where
         M: IntoActiveModel<A>,
     {
-        let mut query = InsertStatement::new();
-        query
-            .into_table(A::Entity::default().table_ref())
-            .or_default_values();
-
-        let mut am: A = m.into_active_model();
-        let primary_key =
-            if !<<A::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::auto_increment() {
-                am.get_primary_key_value()
-            } else {
-                None
-            };
-        let mut columns = Vec::new();
-        let mut values = Vec::new();
-
-        for col in <A::Entity as EntityTrait>::Column::iter() {
-            let av = am.take(col);
-
-            match av {
-                ActiveValue::Set(value) | ActiveValue::Unchanged(value) => {
-                    columns.push(col);
-                    values.push(col.save_enum_as(Expr::val(value)));
-                }
-                ActiveValue::NotSet => {}
-            }
-        }
-
-        query.columns(columns);
-        query.values_panic(values);
-
-        Self {
-            query,
-            primary_key,
-            empty: false,
-            model: PhantomData,
-        }
+        InsertMany::many([m]).into_one()
     }
 
     /// Insert many Model or ActiveModel.
@@ -138,18 +103,12 @@ where
     }
 
     /// Convert self into a `TryInsert`. It is just a wrapper for converting `DbErr::RecordNotInserted` -> `TryInsertResult::Conflicted`.
-    pub fn try_insert(self) -> TryInsert<A>
-    where
-        A: ActiveModelTrait,
-    {
+    pub fn try_insert(self) -> TryInsert<A> {
         TryInsert::from_one(self)
     }
 
     /// Set ON CONFLICT on primary key do nothing, but with MySQL specific polyfill.
-    pub fn on_conflict_do_nothing(mut self) -> TryInsert<A>
-    where
-        A: ActiveModelTrait,
-    {
+    pub fn on_conflict_do_nothing(mut self) -> TryInsert<A> {
         self.query.on_conflict(on_conflict_primary_key::<A>());
 
         TryInsert::from_one(self)
@@ -175,7 +134,7 @@ where
         let mut all_values: Vec<Vec<SimpleExpr>> = Vec::new();
         let mut primary_key = None;
 
-        for model in models.into_iter() {
+        for model in models {
             let mut am: A = model.into_active_model();
             primary_key =
                 if !<<A::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::auto_increment() {
@@ -199,11 +158,10 @@ where
 
         let empty = all_values.is_empty();
 
-        if !empty && columns.iter().all(Option::is_none) {
-            query.or_default_values_many(all_values.len());
-        }
-
-        if !all_values.is_empty() {
+        if !empty {
+            if columns.iter().all(Option::is_none) {
+                query.or_default_values_many(all_values.len());
+            }
             // filter only used column
             query.columns(columns.iter().copied().flatten());
         }
@@ -233,32 +191,22 @@ where
     }
 
     /// Set ON CONFLICT do nothing, but with MySQL specific polyfill.
-    pub fn on_conflict_do_nothing_on<I>(mut self, columns: I) -> TryInsert<A>
+    pub fn on_conflict_do_nothing_on<I>(self, columns: I) -> TryInsert<A>
     where
         I: IntoIterator<Item = <A::Entity as EntityTrait>::Column>,
     {
-        self.query
-            .on_conflict(do_nothing_on_conflict::<A, _>(columns));
-        TryInsert::from_many(self)
+        self.into_one().on_conflict_do_nothing_on(columns)
     }
 
     /// Convert self into a `TryInsert`. It is just a wrapper for converting `DbErr::RecordNotInserted` -> `TryInsertResult::Conflicted`.
-    pub fn try_insert(self) -> TryInsert<A>
-    where
-        A: ActiveModelTrait,
-    {
-        TryInsert::from_many(self)
+    pub fn try_insert(self) -> TryInsert<A> {
+        self.into_one().try_insert()
     }
 
     /// Set ON CONFLICT on primary key do nothing, but with MySQL specific polyfill.
     /// See also [`Insert::on_conflict_do_nothing`].
-    pub fn on_conflict_do_nothing(mut self) -> TryInsert<A>
-    where
-        A: ActiveModelTrait,
-    {
-        self.query.on_conflict(on_conflict_primary_key::<A>());
-
-        TryInsert::from_many(self)
+    pub fn on_conflict_do_nothing(self) -> TryInsert<A> {
+        self.into_one().on_conflict_do_nothing()
     }
 
     /// Keep the input's empty state when changing the execution wrapper.
@@ -279,43 +227,8 @@ where
     }
 }
 
-impl<A> QueryTrait for Insert<A>
-where
-    A: ActiveModelTrait,
-{
-    type QueryStatement = InsertStatement;
-
-    fn query(&mut self) -> &mut InsertStatement {
-        &mut self.query
-    }
-
-    fn as_query(&self) -> &InsertStatement {
-        &self.query
-    }
-
-    fn into_query(self) -> InsertStatement {
-        self.query
-    }
-}
-
-impl<A> QueryTrait for InsertMany<A>
-where
-    A: ActiveModelTrait,
-{
-    type QueryStatement = InsertStatement;
-
-    fn query(&mut self) -> &mut InsertStatement {
-        &mut self.query
-    }
-
-    fn as_query(&self) -> &InsertStatement {
-        &self.query
-    }
-
-    fn into_query(self) -> InsertStatement {
-        self.query
-    }
-}
+builds_statement!(InsertStatement, Insert<A: ActiveModelTrait>);
+builds_statement!(InsertStatement, InsertMany<A: ActiveModelTrait>);
 
 impl<A> TryInsert<A>
 where
@@ -325,10 +238,6 @@ where
         Self {
             insert_struct: insert,
         }
-    }
-
-    fn from_many(insert: InsertMany<A>) -> Self {
-        Self::from_one(insert.into_one())
     }
 
     /// Try insert one item
@@ -345,7 +254,7 @@ where
         M: IntoActiveModel<A>,
         I: IntoIterator<Item = M>,
     {
-        Self::from_many(Insert::many(models))
+        Self::from_one(Insert::many(models).into_one())
     }
 
     /// Set ON CONFLICT logic and return the underlying [`Insert`].
